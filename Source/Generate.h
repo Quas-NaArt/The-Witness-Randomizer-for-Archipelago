@@ -27,27 +27,75 @@ public:
 		arrowColor = backgroundColor = successColor = { 0, 0, 0, 0 };
 		resetConfig();
 	}
-	enum Config { //See configinfo.txt for explanations of config flags.
-		None = 0, FullGaps = 0x1, StartEdgeOnly = 0x2, DisableWrite = 0x4, PreserveStructure = 0x8, MakeStonesUnsolvable = 0x10, SmallShapes = 0x20, DisconnectShapes = 0x40, ResetColors = 0x80,
-		DisableCancelShapes = 0x100, RequireCancelShapes = 0x200, BigShapes = 0x400, SplitShapes = 0x800, RequireCombineShapes = 0x1000, TreehouseLayout = 0x2000, TreehouseColors = 0x4000,
-		AlternateColors = 0x8000, WriteColors = 0x10000, Write2Color = 0x20000, FixBackground = 0x40000, WriteSpecular = 0x80000, LongPath = 0x100000, ShortPath = 0x200000, EnableFlash = 0x400000,
-		DecorationsOnly = 0x800000, FalseParity = 0x1000000, DisableDotIntersection = 0x2000000, WriteDotColor = 0x4000000, WriteDotColor2 = 0x8000000, LongestPath = 0x10000000, WriteInvisible = 0x20000000,
-		DisableReset = 0x40000000, MountainFloorH = 0x80000000
+	enum Config
+	{ // See configinfo.txt for explanations of config flags.
+		None = 0,
+		FullGaps = 0x1,
+		StartEdgeOnly = 0x2,
+		DisableWrite = 0x4,
+		PreserveStructure = 0x8,
+		MakeStonesUnsolvable = 0x10,
+		SmallShapes = 0x20,
+		DisconnectShapes = 0x40,
+		ResetColors = 0x80,
+		DisableCancelShapes = 0x100,
+		RequireCancelShapes = 0x200,
+		BigShapes = 0x400,
+		SplitShapes = 0x800,
+		RequireCombineShapes = 0x1000,
+		TreehouseLayout = 0x2000,
+		TreehouseColors = 0x4000,
+		AlternateColors = 0x8000,
+		WriteColors = 0x10000,
+		Write2Color = 0x20000,
+		FixBackground = 0x40000,
+		WriteSpecular = 0x80000,
+		LongPath = 0x100000,
+		ShortPath = 0x200000,
+		EnableFlash = 0x400000,
+		DecorationsOnly = 0x800000,
+		FalseParity = 0x1000000,
+		DisableDotIntersection = 0x2000000,
+		WriteDotColor = 0x4000000,
+		WriteDotColor2 = 0x8000000,
+		LongestPath = 0x10000000,
+		WriteInvisible = 0x20000000,
+		DisableReset = 0x40000000,
+		MountainFloorH = 0x80000000
 	};
+
+	void generate(int id)
+	{
+		PuzzleSymbols symbols({});
+		bool done = false;
+		while (!done)
+		{
+			done = generate(id, symbols);
+		}
+	}
 	
-	void generate(int id) { PuzzleSymbols symbols({ }); while (!generate(id, symbols)); }
+	[[deprecated("Hard-coded generate() signatures are discouraged in favor of the vectorized version.")]]
 	void generate(int id, int symbol, int amount);
+	[[deprecated("Hard-coded generate() signatures are discouraged in favor of the vectorized version.")]]
 	void generate(int id, int symbol1, int amount1, int symbol2, int amount2);
+	[[deprecated("Hard-coded generate() signatures are discouraged in favor of the vectorized version.")]]
 	void generate(int id, int symbol1, int amount1, int symbol2, int amount2, int symbol3, int amount3);
+	[[deprecated("Hard-coded generate() signatures are discouraged in favor of the vectorized version.")]]
 	void generate(int id, int symbol1, int amount1, int symbol2, int amount2, int symbol3, int amount3, int symbol4, int amount4);
+	[[deprecated("Hard-coded generate() signatures are discouraged in favor of the vectorized version.")]]
 	void generate(int id, int symbol1, int amount1, int symbol2, int amount2, int symbol3, int amount3, int symbol4, int amount4, int symbol5, int amount5);
+	[[deprecated("Hard-coded generate() signatures are discouraged in favor of the vectorized version.")]]
 	void generate(int id, int symbol1, int amount1, int symbol2, int amount2, int symbol3, int amount3, int symbol4, int amount4, int symbol5, int amount5, int symbol6, int amount6);
+	[[deprecated("Hard-coded generate() signatures are discouraged in favor of the vectorized version.")]]
 	void generate(int id, int symbol1, int amount1, int symbol2, int amount2, int symbol3, int amount3, int symbol4, int amount4, int symbol5, int amount5, int symbol6, int amount6, int symbol7, int amount7);
+	[[deprecated("Hard-coded generate() signatures are discouraged in favor of the vectorized version.")]]
 	void generate(int id, int symbol1, int amount1, int symbol2, int amount2, int symbol3, int amount3, int symbol4, int amount4, int symbol5, int amount5, int symbol6, int amount6, int symbol7, int amount7, int symbol8, int amount8);
+	[[deprecated("Hard-coded generate() signatures are discouraged in favor of the vectorized version.")]]
 	void generate(int id, int symbol1, int amount1, int symbol2, int amount2, int symbol3, int amount3, int symbol4, int amount4, int symbol5, int amount5, int symbol6, int amount6, int symbol7, int amount7, int symbol8, int amount8, int symbol9, int amount9);
+	
 	void generate(int id, const std::vector<std::pair<int, int>>& symbolVec);
-	void generateMulti(int id, std::vector<std::shared_ptr<Generate>> gens, std::vector<std::pair<int, int>> symbolVec);
-	void generateMulti(int id, int numSolutions, std::vector<std::pair<int, int>> symbolVec);
+	void generateMulti(int id, const std::vector<std::shared_ptr<Generate>>& gens, const std::vector<std::pair<int, int>>& symbolVec);
+	void generateMulti(int id, int numSolutions, const std::vector<std::pair<int, int>>& symbolVec);
 	void generateMaze(int id);
 	void generateMaze(int id, int numStarts, int numExits);
 	void initPanel(int id);

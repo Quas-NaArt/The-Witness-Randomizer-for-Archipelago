@@ -59,7 +59,7 @@ void Generate::generate(int id, const std::vector<std::pair<int, int>>& symbolVe
 }
 
 //Generate puzzle with multiple solutions. id - id of the puzzle. gens - the generators that will be used to make solutions. symbolVec - pairs of symbols and amounts to use
-void Generate::generateMulti(int id, std::vector<std::shared_ptr<Generate>> gens, std::vector<std::pair<int, int>> symbolVec)
+void Generate::generateMulti(int id, const std::vector<std::shared_ptr<Generate>>& gens, const std::vector<std::pair<int, int>>& symbolVec)
 {
 	MultiGenerate gen;
 	gen.splitStones = (id == 0x17C34); //Mountaintop
@@ -68,7 +68,7 @@ void Generate::generateMulti(int id, std::vector<std::shared_ptr<Generate>> gens
 }
 
 //Generate puzzle with multiple solutions. id - id of the puzzle. numSolutions - the number of possible solutions. symbolVec - pairs of symbols and amounts to use
-void Generate::generateMulti(int id, int numSolutions, std::vector<std::pair<int, int>> symbolVec)
+void Generate::generateMulti(int id, int numSolutions, const std::vector<std::pair<int, int>>& symbolVec)
 {
 	MultiGenerate gen;
 	gen.splitStones = (id == 0x17C34); //Mountaintop
@@ -317,7 +317,7 @@ void Generate::incrementProgress()
 	_areaTotal++;
 	_genTotal++;
 	if (_handle) {
-	int total = (_totalPuzzles == 0 ? _areaPuzzles : _totalPuzzles);
+		int total = (_totalPuzzles == 0 ? _areaPuzzles : _totalPuzzles);
 		if (total == 0) return;
 		std::wstring text = _areaName + L": " + std::to_wstring(_areaTotal) + L"/" + std::to_wstring(_areaPuzzles) + L" (" + std::to_wstring(_genTotal * 100 / total) + L"%)";
 		SetWindowText(_handle, text.c_str());
