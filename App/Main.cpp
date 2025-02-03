@@ -67,7 +67,7 @@
 #define ARROW_UP_LEFT 0x706
 #define ARROW_DOWN_LEFT 0x707
 
-#define DEBUG true
+#define DEBUG false
 
 //Panel to edit
 int panel = 0x09E69;
@@ -93,7 +93,7 @@ int lastSeed;
 bool lastHard;
 bool colorblind;
 std::vector<long long> shapePos = { SHAPE_11, SHAPE_12, SHAPE_13, SHAPE_14, SHAPE_21, SHAPE_22, SHAPE_23, SHAPE_24, SHAPE_31, SHAPE_32, SHAPE_33, SHAPE_34, SHAPE_41, SHAPE_42, SHAPE_43, SHAPE_44 };
-std::vector<long long> defaultShape = { SHAPE_21, SHAPE_31, SHAPE_32, SHAPE_33 }; //L-shape
+std::vector<long long> defaultShape = { SHAPE_21, SHAPE_31, SHAPE_32, SHAPE_33 }; //L-shape //x-y order?
 std::vector<long long> directions = { ARROW_UP_RIGHT, ARROW_UP, ARROW_UP_LEFT, ARROW_LEFT, 0, ARROW_RIGHT, ARROW_DOWN_LEFT, ARROW_DOWN, ARROW_DOWN_RIGHT }; //Order of directional check boxes
 float target;
 
@@ -244,8 +244,11 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 			randomizer->seed = seed;
 			randomizer->colorblind = IsDlgButtonChecked(hwnd, IDC_COLORBLIND);
 			randomizer->doubleMode = doubleMode;
-			if (hard) randomizer->GenerateHard(hwndLoadingText);
-			else randomizer->GenerateNormal(hwndLoadingText);
+			if (hard) {
+				randomizer->GenerateHard(hwndLoadingText);
+			} else {
+				randomizer->GenerateNormal(hwndLoadingText);
+			}
 			memory->WritePanelData(0x00064, BACKGROUND_REGION_COLOR + 12, seed);
 			memory->WritePanelData(0x00182, BACKGROUND_REGION_COLOR + 12, (int)hard);
 			memory->WritePanelData(0x0A3B2, BACKGROUND_REGION_COLOR + 12, (int)doubleMode);
@@ -257,6 +260,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 		//Add a symbol to the puzzle (debug mode only)
 		case IDC_ADD:
+#if DEBUG
 			memset(&text, 0, sizeof(text));
 			GetWindowText(hwndElem, text, 30);
 			if (wcscmp(text, L"Stone") == 0) symbol = Decoration::Shape::Stone;
@@ -288,7 +292,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 			if (wcscmp(text, L"Blue") == 0) color = Decoration::Color::Blue;
 			if (wcscmp(text, L"Purple") == 0) color = Decoration::Color::Purple;
 			if (wcscmp(text, L"Magenta") == 0) color = Decoration::Color::Magenta;
-			if (wcscmp(text, L"None") == 0) color = Decoration::Color::None;
+			if (wcscmp(text, L"None") == 0) color = Decoration::Color::Any;
 			if (wcscmp(text, L"???") == 0) color = Decoration::Color::X;
 			str.reserve(30);
 			GetWindowText(hwndCol, &str[0], 30);
@@ -303,10 +307,12 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 				_panel->SetShape(x, y, symbol | currentDir, IsDlgButtonChecked(hwnd, IDC_ROTATED), IsDlgButtonChecked(hwnd, IDC_NEGATIVE), color);
 			else _panel->SetSymbol(x, y, symbol, color);
 			_panel->Write(panel);
+#endif
 			break;
 
 		//Remove a symbol from the puzzle (debug mode only)
 		case IDC_REMOVE:
+#if DEBUG
 			GetWindowText(hwndCol, &str[0], 30);
 			x = _wtoi(str.c_str());
 			GetWindowText(hwndRow, &str[0], 30);
@@ -326,6 +332,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 			else
 				_panel->ClearSymbol(x, y);
 			_panel->Write(panel);
+#endif
 			break;
 
 		//Debug mode checkboxes
@@ -340,24 +347,24 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 		case IDC_SYMMETRYX:
 			CheckDlgButton(hwnd, IDC_SYMMETRYX, !IsDlgButtonChecked(hwnd, IDC_SYMMETRYX));
 			if (IsDlgButtonChecked(hwnd, IDC_SYMMETRYX) && IsDlgButtonChecked(hwnd, IDC_SYMMETRYY))
-				_panel->symmetry = Panel::Symmetry::Rotational;
+				_panel->_symmetry = Panel::Symmetry::Rotational;
 			else if (IsDlgButtonChecked(hwnd, IDC_SYMMETRYX))
-				_panel->symmetry = Panel::Symmetry::Horizontal;
+				_panel->_symmetry = Panel::Symmetry::Horizontal;
 			else if (IsDlgButtonChecked(hwnd, IDC_SYMMETRYY))
-				_panel->symmetry = Panel::Symmetry::Vertical;
-			else _panel->symmetry = Panel::Symmetry::None;
+				_panel->_symmetry = Panel::Symmetry::Vertical;
+			else _panel->_symmetry = Panel::Symmetry::None;
 			_panel->Write(panel);
 			break;
 
 		case IDC_SYMMETRYY:
 			CheckDlgButton(hwnd, IDC_SYMMETRYY, !IsDlgButtonChecked(hwnd, IDC_SYMMETRYY));
 			if (IsDlgButtonChecked(hwnd, IDC_SYMMETRYX) && IsDlgButtonChecked(hwnd, IDC_SYMMETRYY))
-				_panel->symmetry = Panel::Symmetry::Rotational;
+				_panel->_symmetry = Panel::Symmetry::Rotational;
 			else if (IsDlgButtonChecked(hwnd, IDC_SYMMETRYX))
-				_panel->symmetry = Panel::Symmetry::Horizontal;
+				_panel->_symmetry = Panel::Symmetry::Horizontal;
 			else if (IsDlgButtonChecked(hwnd, IDC_SYMMETRYY))
-				_panel->symmetry = Panel::Symmetry::Vertical;
-			else _panel->symmetry = Panel::Symmetry::None;
+				_panel->_symmetry = Panel::Symmetry::Vertical;
+			else _panel->_symmetry = Panel::Symmetry::None;
 			_panel->Write(panel);
 			break;
 		//Tetris shape editing
@@ -606,9 +613,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 			}
 		}
 
-		if (_panel->symmetry == Panel::Symmetry::Horizontal || _panel->symmetry == Panel::Symmetry::Rotational)
+		if (_panel->_symmetry == Panel::Symmetry::Horizontal || _panel->_symmetry == Panel::Symmetry::Rotational)
 			CheckDlgButton(hwnd, IDC_SYMMETRYX, TRUE);
-		if (_panel->symmetry == Panel::Symmetry::Vertical || _panel->symmetry == Panel::Symmetry::Rotational)
+		if (_panel->_symmetry == Panel::Symmetry::Vertical || _panel->_symmetry == Panel::Symmetry::Rotational)
 			CheckDlgButton(hwnd, IDC_SYMMETRYY, TRUE);
 	}
 

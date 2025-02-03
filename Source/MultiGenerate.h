@@ -1,33 +1,44 @@
 #pragma once
+
+#include "Decoration.h"
 #include "Generate.h"
 #include "Random.h"
+#include "Utilities.h"
 
 //Class for generating puzzles with multiple solutions.
-class MultiGenerate
-{
+class MultiGenerate {
 public:
 
-	MultiGenerate() { splitStones = false; }
+	MultiGenerate(bool splitStones = false) :
+		splitStones{splitStones}
+	{}
 	~MultiGenerate() { }
 
 	std::vector<std::shared_ptr<Generate>> generators;
 
-	void generate(int id, const std::vector<std::shared_ptr<Generate>>& gens, const std::vector<std::pair<int, int>>& symbolVec);
+	void generate(
+		int id,
+		const std::vector<std::shared_ptr<Generate>>& gens,
+		const std::vector<DecoPair>& symbolVec);
 
-	bool splitStones;
 
 private:
+	bool splitStones;
 
+	// Main lifter
 	bool generate(int id, PuzzleSymbols symbols);
-	bool place_all_symbols(PuzzleSymbols symbols);
-	bool can_place_gap(Point pos);
-	bool place_stones(int color, int amount);
-	bool place_stars(int color, int amount);
-	bool can_place_triangle(Point pos);
-	bool place_triangles(int color, int amount);
 
-	template <class T> T pick_random(std::vector<T>& vec) { return vec[Random::rand() % vec.size()]; }
-	template <class T> T pick_random(std::set<T>& set) { auto it = set.begin(); std::advance(it, Random::rand() % set.size()); return *it; }
+	// Functionality after preprocessing
+	bool place_all_symbols(PuzzleSymbols symbols);
+
+	// Detailed procedures
+	bool place_stars(Deco::Color color, int amount);
+	bool place_stones(Deco::Color color, int amount);
+	bool place_triangles(Deco::Color color, int amount);
+
+	// Const ability checks
+	bool can_place_gap(Point pos) const;
+	bool can_place_triangle(Point pos) const;
 
 	friend class Special;
 };

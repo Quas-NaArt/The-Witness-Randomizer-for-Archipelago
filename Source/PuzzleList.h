@@ -1,8 +1,11 @@
 #pragma once
+
 #include "Generate.h"
 #include "Special.h"
 #include "Random.h"
 
+// This class exists to send a lot of calls to the Generator on the initial call to the Randomizer.
+// Then once the generation is over, it gets destructed, a job well done.
 class PuzzleList {
 
 public: 
@@ -10,38 +13,46 @@ public:
 	void GenerateAllN();
 	void GenerateAllH();
 
-	PuzzleList() {
-		generator = std::make_shared<Generate>();
+	// All of these values are known by the sole caller at the time of calling.
+	// Construct with them rather than calling setSeed on a half-constructed object.
+	PuzzleList(HWND loadingHandle, int seed, bool isRNG, bool colorblind)
+		: _handle{loadingHandle}
+		, seed{seed}
+		, seedIsRNG{isRNG}
+		, colorblind{colorblind}
+	{
+		generator = std::make_shared<Generate>(loadingHandle, seed, colorblind);
 		specialCase = std::make_shared<Special>(generator);
 	}
 
-	PuzzleList(std::shared_ptr<Generate> generator) {
-		this->generator = generator;
-		this->specialCase = std::make_shared<Special>(generator);
-	}
+	// PuzzleList(std::shared_ptr<Generate> generator) {
+	// 	this->generator = generator;
+	// 	this->specialCase = std::make_shared<Special>(generator);
+	// }
 
-	void setLoadingHandle(HWND handle) {
-		_handle = handle;
-		generator->setLoadingHandle(handle);
-	}
+	// void setLoadingHandle(HWND handle) {
+	// 	_handle = handle;
+	// 	generator->setLoadingHandle(handle);
+	// }
 
-	void setSeed(int seed, bool isRNG, bool colorblind) {
-		this->seed = seed;
-		this->seedIsRNG = isRNG;
-		this->colorblind = colorblind;
-		if (seed >= 0) generator->seed(seed);
-		else generator->seed(Random::rand());
-		generator->colorblind = colorblind;
-	}
+	// void setSeed(int seed, bool isRNG, bool colorblind) {
+	// 	this->seed = seed;
+	// 	this->seedIsRNG = isRNG;
+	// 	this->colorblind = colorblind;
+	// 	if (seed >= 0) generator->seed(seed);
+	// 	else generator->seed(Random::rand());
+	// 	generator->colorblind = colorblind;
+	// }
 
 	void CopyTargets();
 
+private: // None of these are called externally
 	//--------------------------Normal difficulty---------------------------
 
 	void GenerateTutorialN();
 	void GenerateSymmetryN();
 	void GenerateQuarryN();
-	void GenerateBunkerN(); //Can't randomize because panels refuse to render the symbols
+	//void GenerateBunkerN(); //Can't randomize because panels refuse to render the symbols
 	void GenerateSwampN();
 	void GenerateTreehouseN();
 	void GenerateTownN();
@@ -84,23 +95,8 @@ private:
 	std::shared_ptr<Generate> generator;
 	std::shared_ptr<Special> specialCase;
 	HWND _handle = nullptr;
-	int seed = 0;
-	bool seedIsRNG = false;
-	bool colorblind = false;
+	int seed = 0; // What if this class didn't hold onto these?
+	bool seedIsRNG = false; // What if this class didn't hold onto these?
+	bool colorblind = false; // What if this class didn't hold onto these?
 
-	template <class T> T pick_random(std::vector<T>& vec) { return vec[Random::rand() % vec.size()]; }
-	template <class T> T pick_random(std::set<T>& set) { auto it = set.begin(); std::advance(it, Random::rand() % set.size()); return *it; }
-	template <class T> T pop_random(std::vector<T>& vec) {
-		int i = Random::rand() % vec.size();
-		T item = vec[i];
-		vec.erase(vec.begin() + i);
-		return item;
-	}
-	template <class T> T pop_random(std::set<T>& set) {
-		auto it = set.begin();
-		std::advance(it, Random::rand() % set.size());
-		T item = *it;
-		set.erase(item);
-		return item;
-	}
 };

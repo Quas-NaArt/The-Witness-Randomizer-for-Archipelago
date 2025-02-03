@@ -1,13 +1,16 @@
 #pragma once
-#include "Panel.h"
-#include "Randomizer.h"
-#include "PuzzleSymbols.h"
+
 #include <stdlib.h>
-#include <string>
 #include <time.h>
-#include <set>
+
 #include <algorithm>
+#include <set>
+#include <string>
+
+#include "Panel.h"
+#include "PuzzleSymbols.h"
 #include "Random.h"
+#include "Randomizer.h"
 
 typedef std::set<Point> Shape;
 
@@ -15,18 +18,35 @@ typedef std::set<Point> Shape;
 class Generate
 {
 public:
-	Generate() {
-		_width = _height = 0;
-		_areaTotal = _genTotal = _totalPuzzles = _areaPuzzles = _stoneTypes = 0;
-		_fullGaps = _bisect = _allowNonMatch = false;
-		_handle = NULL;
-		_panel = NULL;
-		_parity = -1;
-		colorblind = false;
-		_seed = Random::rand();
-		arrowColor = backgroundColor = successColor = { 0, 0, 0, 0 };
+	// Factories under consideration
+	// If these are included, make constructors private.
+	// // Call this factory from the Randomizer class, so it can be used to hold
+	// // the primary seed and make the first call to Random.h to establish the PRNG
+	// static Generate make_primary(HWND loadingHandle, int seed, bool colorblind);
+	// // Further calls to make ad hoc Generators occur throughout Special for puzzles with multiple solutions,
+	// // in Main for the debug commands, and in DesertN for some reason
+	// static Generate make_secondary(bool colorblind = false /*, int seed = 0*/);
+	// // The main generation thread can deterministically spawn subthreads to speed up processing,
+	// // so long as the subthreads are always made in the same order, given a new seed that initializes Random.h
+	// // in the new thread, and then works off that seed from then on. Setting this up should be made easy.
+	// static Generate spawn_threadsafe();
+
+	// Main call: This should be made from Randomizer
+	Generate(HWND loadingHandle, int seed, bool colorblind) 
+		: _handle{loadingHandle}
+		, _seed{seed}
+	{
+		if (seed >= 0) this->seed(seed);
+		else this->seed(Random::rand());
 		resetConfig();
 	}
+
+	// Subgenerator call: Everywhere else. They probably shouldn't talk to the GUI.
+	Generate(bool colorblind=false) : colorblind{colorblind} {
+		this->seed(Random::rand());
+		resetConfig();
+	}
+
 	enum Config
 	{ // See configinfo.txt for explanations of config flags.
 		None = 0,
@@ -74,52 +94,92 @@ public:
 		}
 	}
 	
-	[[deprecated("Hard-coded generate() signatures are discouraged in favor of the vectorized version.")]]
-	void generate(int id, int symbol, int amount);
-	[[deprecated("Hard-coded generate() signatures are discouraged in favor of the vectorized version.")]]
-	void generate(int id, int symbol1, int amount1, int symbol2, int amount2);
-	[[deprecated("Hard-coded generate() signatures are discouraged in favor of the vectorized version.")]]
-	void generate(int id, int symbol1, int amount1, int symbol2, int amount2, int symbol3, int amount3);
-	[[deprecated("Hard-coded generate() signatures are discouraged in favor of the vectorized version.")]]
-	void generate(int id, int symbol1, int amount1, int symbol2, int amount2, int symbol3, int amount3, int symbol4, int amount4);
-	[[deprecated("Hard-coded generate() signatures are discouraged in favor of the vectorized version.")]]
-	void generate(int id, int symbol1, int amount1, int symbol2, int amount2, int symbol3, int amount3, int symbol4, int amount4, int symbol5, int amount5);
-	[[deprecated("Hard-coded generate() signatures are discouraged in favor of the vectorized version.")]]
-	void generate(int id, int symbol1, int amount1, int symbol2, int amount2, int symbol3, int amount3, int symbol4, int amount4, int symbol5, int amount5, int symbol6, int amount6);
-	[[deprecated("Hard-coded generate() signatures are discouraged in favor of the vectorized version.")]]
-	void generate(int id, int symbol1, int amount1, int symbol2, int amount2, int symbol3, int amount3, int symbol4, int amount4, int symbol5, int amount5, int symbol6, int amount6, int symbol7, int amount7);
-	[[deprecated("Hard-coded generate() signatures are discouraged in favor of the vectorized version.")]]
-	void generate(int id, int symbol1, int amount1, int symbol2, int amount2, int symbol3, int amount3, int symbol4, int amount4, int symbol5, int amount5, int symbol6, int amount6, int symbol7, int amount7, int symbol8, int amount8);
-	[[deprecated("Hard-coded generate() signatures are discouraged in favor of the vectorized version.")]]
-	void generate(int id, int symbol1, int amount1, int symbol2, int amount2, int symbol3, int amount3, int symbol4, int amount4, int symbol5, int amount5, int symbol6, int amount6, int symbol7, int amount7, int symbol8, int amount8, int symbol9, int amount9);
-	
-	void generate(int id, const std::vector<std::pair<int, int>>& symbolVec);
-	void generateMulti(int id, const std::vector<std::shared_ptr<Generate>>& gens, const std::vector<std::pair<int, int>>& symbolVec);
-	void generateMulti(int id, int numSolutions, const std::vector<std::pair<int, int>>& symbolVec);
+	void generate(int id, const std::vector<DecoPair>& symbolVec) {
+		PuzzleSymbols symbols(symbolVec);
+		while (!generate(id, symbols));
+	};
+
+	/// @brief Generate puzzle with multiple solutions.
+	/// The actual implementation.
+	/// @param id id of the puzzle
+	/// @param symbolVec pairs of symbols and amounts to use
+	/// @param splitStones flag to indicate the stones should be spread farther
+	/// than usual
+	void generateMulti(int id,
+					   const std::vector<std::shared_ptr<Generate>>& gens,
+					   const std::vector<DecoPair>& symbolVec,
+					   bool splitStones = false);
+
+	/// Does anyone actually use this version?
+	/// @param numSolutions the number of possible solutions
+	void generateMulti(int id, int numSolutions,
+					   const std::vector<DecoPair>& symbolVec,
+					   bool splitStones = false) {
+		// Create a vector of numSolutions default-initialized shared Generator
+		// pointers. TODO: Investigate changing to unique.
+		std::vector<std::shared_ptr<Generate>> gens(
+			numSolutions);  // vector ctor (3)
+		// Then pass it on to the overload.
+		generateMulti(id, gens, symbolVec, splitStones);
+	}
+
 	void generateMaze(int id);
 	void generateMaze(int id, int numStarts, int numExits);
 	void initPanel(int id);
 	void setPath(const std::set<Point>& path) {
+		// why a Set?
 		customPath = path;
-		for (Point p : path) setSymbol(IntersectionFlags::PATH, p.first, p.second); }
+		for (Point point : path) {
+			setSymbol(Deco::Deco(Deco::Symbol::Path), point);
+		}
+	}
 	void setObstructions(const std::vector<Point>& walls) { _obstructions = { walls }; }
 	void setObstructions(const std::vector<std::vector<Point>>& walls) { _obstructions = walls; }
-	void setSymbol(Decoration::Shape symbol, int x, int y);
-	void setSymbol(IntersectionFlags symbol, int x, int y) { setSymbol(static_cast<Decoration::Shape>(symbol), x, y); }
-	void setVal(int val, int x, int y) { _panel->_grid[x][y] = val; }
+	void setSymbol(const Deco::Deco& symbol, const Point& point);
+	void setSymbol(const Deco::Deco& symbol, int x, int y) {
+		setSymbol(symbol, {x, y});
+	}
+	//void setSymbol(IntersectionFlags symbol, int x, int y) { setSymbol(static_cast<Decoration::Shape>(symbol), x, y); }
+	// [[deprecated]]
+	// void setVal(int val, int x, int y) { _panel->grid[x][y] = val; }
+	void setVal(Point point, const Deco::Deco& symbol) {
+		_panel->SetGridSymbol(point, symbol);
+	}
 	void setGridSize(int width, int height);
+	void setGridSize(Point point) {
+		setGridSize(point.first, point.second);
+	};
 	void setSymmetry(Panel::Symmetry symmetry);
 	void write(int id);
-	void setLoadingHandle(HWND handle) { _handle = handle; }
-	void setLoadingData(int totalPuzzles) { _totalPuzzles = totalPuzzles; _genTotal = 0; }
-	void setLoadingData(const std::wstring& areaName, int numPuzzles) { _areaName = areaName; _areaPuzzles = numPuzzles; _areaTotal = 0; }
+	void setLoadingHandle(HWND handle) {
+		_handle = handle;
+	}
+	void setLoadingData(int totalPuzzles) {
+		_totalPuzzles = totalPuzzles;
+		_genTotal = 0;
+	}
+	void setLoadingData(const std::wstring& areaName, int numPuzzles) {
+		_areaName = areaName;
+		_areaPuzzles = numPuzzles;
+		_areaTotal = 0;
+	}
 	void setFlag(Config option) { _config |= option; };
 	void setFlagOnce(Config option) { _config |= option; _oneTimeAdd |= option; };
-	bool hasFlag(Config option) { return _config & option; };
-	void removeFlag(Config option) { _config &= ~option; };
-	void removeFlagOnce(Config option) { _config &= ~option; _oneTimeRemove |= option; };
+	bool hasFlag(Config option) const { 
+		return _config & option;
+	};
+	void removeFlag(Config option) {
+		_config &= ~option;
+	};
+	void removeFlagOnce(Config option) {
+		_config &= ~option;
+		_oneTimeRemove |= option;
+	};
 	void resetConfig();
-	void seed(long seed) { Random::seed(seed); _seed = Random::rand(); }
+	void seed(long seed) {
+		Random::seed(seed);
+		_seed = Random::rand();
+	}
 	void incrementProgress();
 
 	float pathWidth; //Controls how thick the line is on the puzzle
@@ -127,32 +187,113 @@ public:
 	std::set<Point> openPos; //Custom set of points that can have symbols placed on
 	std::set<Point> blockPos; //Point that must be left open
 	std::set<Point> customPath; 
-	Color arrowColor, backgroundColor, successColor; //For the arrow puzzles
+
+	//For the arrow puzzles
+	// TODO: Audit need for these to be Public
+	Color arrowColor{0, 0, 0, 0};
+	Color backgroundColor{0, 0, 0, 0};
+	Color successColor{0, 0, 0, 0};
 
 private:
+	// Read the panel's current data, and convert it to a richer object for modification
+	const Deco::Deco& get(Point pos) const {
+		return Deco::to_deco(_panel->grid[pos.first][pos.second]);
+	}
+	const Deco::Deco& get(int x, int y) const {
+		return Deco::to_deco(_panel->grid[x][y]);
+	}
 
-	int get(Point pos) { return _panel->_grid[pos.first][pos.second]; }
-	void set(Point pos, int val) { _panel->_grid[pos.first][pos.second] = val; }
-	int get(int x, int y) { return _panel->_grid[x][y]; }
-	void set(int x, int y, int val) { _panel->_grid[x][y] = val; }
-	int get_symbol_type(int flags) { return flags & 0x700; }
+	// Force a specific symbol into a specific position.
+	void set(Point pos, const Deco::Deco& val) {
+		_panel->SetGridSymbol(pos, val);
+	}
+	// Force a specific symbol into a specific position.
+	void set(int x, int y, const Deco::Deco& val) {
+		// x and y are zero in the lower-left corner
+		// Uses the Deco's custom cast to int
+		_panel->_grid[x][y] = val;
+	}
+	// Force a specific symbol into a specific position.
+	void set(Point pos, int val) {
+		set(pos.first, pos.second, val);
+	}
+	// Force a specific symbol into a specific position.
+	void set(int x, int y, int val) {
+		if (val == 0) {
+			set({x, y}, Deco::kEmpty);
+		} else {
+			_panel->_grid[x][y] = val;
+		}
+	}
+
+	[[deprecated("use the .shape property to determine symbol type.")]]
+	int get_symbol_type(int flags) const {
+		return flags & 0x700;
+	}
+
 	void set_path(Point pos);
-	Point get_sym_point(Point pos) { return _panel->get_sym_point(pos); }
-	int get_parity(Point pos) { return (pos.first / 2 + pos.second / 2) % 2; }
+	Point get_sym_point(Point pos) const {
+		return _panel->get_sym_point(pos);
+	}
+
+	// TODO: Points should determine their own parity.
+	int get_parity(Point pos) const {
+		return (pos.first / 2 + pos.second / 2) % 2;
+	}
+
 	void clear();
 	void resetVars();
 	void init_treehouse_layout();
-	template <class T> T pick_random(const std::vector<T>& vec) { return vec[Random::rand() % vec.size()]; }
-	template <class T> T pick_random(const std::set<T>& set) { auto it = set.begin(); std::advance(it, Random::rand() % set.size()); return *it; }
-	template <class T> T pop_random(const std::vector<T>& vec) { int i = Random::rand() % vec.size(); T item = vec[i]; vec.erase(vec.begin() + i); return item; }
-	template <class T> T pop_random(const std::set<T>& set) { T item = pick_random(set); set.erase(item); return item; }
-	bool on_edge(Point p) { return (Point::pillarWidth == 0 && (p.first == 0 || p.first + 1 == _panel->_width) || p.second == 0 || p.second + 1 == _panel->_height); }
-	bool off_edge(Point p) { return (p.first < 0 || p.first >= _panel->_width || p.second < 0 || p.second >= _panel->_height); }
-	static std::vector<Point> _DIRECTIONS1, _8DIRECTIONS1, _DIRECTIONS2, _8DIRECTIONS2, _SHAPEDIRECTIONS, _DISCONNECT;
+
+	// Returns true if the point is on the edge of the puzzle grid.
+	bool on_edge(Point p) const {
+		// Pillars have no horizontal edges
+		return (_panel->_pillarWidth == 0 && (p.first == 0 || p.first + 1 == _panel->width) ||
+				p.second == 0 || p.second + 1 == _panel->height);
+	}
+
+	// Returns true if the point is beyond the extents of the puzzle grid.
+	bool off_edge(Point p) const {
+		return (p.first < 0 ||
+				p.first >= _panel->width ||
+				p.second < 0 ||
+				p.second >= _panel->height);
+	}
+
+
+	// These are *offsets* from Points, not absolute positions.
+	// Keep in mind that the generator grid is doubled, to insersperse paths and symbols.
+	// Conceptually, these vectors are a sort of image kernel.
+	constexpr const static std::array<Point, 4>& _DIRECTIONS1 {
+		Point(0, 1), Point(0, -1), Point(1, 0), Point(-1, 0),
+	};
+	constexpr const static std::array<Point, 8>& _8DIRECTIONS1 {
+		Point(0, 1), Point(0, -1), Point(1, 0), Point(-1, 0),
+		Point(1, 1), Point(1, -1), Point(-1, -1), Point(-1, 1),
+	};
+	constexpr const static std::array<Point, 4>& _DIRECTIONS2 {
+		Point(0, 2), Point(0, -2), Point(2, 0), Point(-2, 0),
+	};
+	constexpr const static std::array<Point, 8>& _8DIRECTIONS2 {
+		Point(0, 2), Point(0, -2), Point(2, 0), Point(-2, 0),
+		Point(2, 2), Point(2, -2), Point(-2, -2), Point(-2, 2),
+	};
+
+	//Used to make the discontiguous shapes
+	constexpr const static std::array<Point, 20>& _DISCONNECT {
+		Point(0, 2), Point(0, -2), Point(2, 0), Point(-2, 0),
+		Point(2, 2), Point(2, -2), Point(-2, -2), Point(-2, 2), 
+		Point(0, 2), Point(0, -2), Point(2, 0), Point(-2, 0),
+		Point(2, 2), Point(2, -2), Point(-2, -2), Point(-2, 2),
+		Point(0, 4), Point(0, -4), Point(4, 0), Point(-4, 0), 
+	};
+
+	std::vector<Point> _SHAPEDIRECTIONS = { }; //This will eventually be set to one of the above lists
+
 	bool generate_maze(int id, int numStarts, int numExits);
 	bool generate(int id, PuzzleSymbols symbols); //************************************************************
 	bool place_all_symbols(PuzzleSymbols& symbols);
-	bool generate_path(PuzzleSymbols& symbols);
+	bool generate_path(const PuzzleSymbols& symbols);
 	bool generate_path_length(int minLength, int maxLength);
 	bool generate_path_length(int minLength) { return generate_path_length(minLength, 10000); };
 	bool generate_path_regions(int minRegions);
@@ -160,56 +301,77 @@ private:
 	bool generate_special_path();
 	void erase_path();
 	Point adjust_point(Point pos);
-	std::set<Point> get_region(Point pos);
-	std::vector<int> get_symbols_in_region(Point pos);
-	std::vector<int> get_symbols_in_region(const std::set<Point>& region);
+	std::set<Point> get_region(Point pos) const;
+	std::vector<int> get_symbols_in_region(Point pos) const;
+	std::vector<int> get_symbols_in_region(const std::set<Point>& region) const;
+	
 	bool place_start(int amount);
 	bool place_exit(int amount);
-	bool can_place_gap(Point pos);
+
+	bool can_place_gap(Point pos) const;
 	bool place_gaps(int amount);
-	bool can_place_dot(Point pos, bool intersectionOnly);
-	bool place_dots(int amount, int color, bool intersectionOnly);
-	bool can_place_stone(const std::set<Point>& region, int color);
-	bool place_stones(int color, int amount);
+
+	bool can_place_dot(Point pos, bool intersectionOnly) const;
+	bool place_dots(DecoPair dp); // TODO: Investigate making const&
+
+	bool can_place_stone(const std::set<Point>& region, const Deco::Color color) const;
+	bool place_stones(const DecoPair& dp);
+
 	Shape generate_shape(std::set<Point>& region, std::set<Point>& bufferRegion, Point pos, int maxSize);
 	Shape generate_shape(std::set<Point>& region, Point pos, int maxSize) { std::set<Point> buffer; return generate_shape(region, buffer, pos, maxSize); }
 	int make_shape_symbol(Shape shape, bool rotated, bool negative, int rotation, int depth);
 	int make_shape_symbol(const Shape& shape, bool rotated, bool negative) { return make_shape_symbol(shape, rotated, negative, -1, 0); }
-	bool place_shapes(const std::vector<int>& colors, const std::vector<int>& negativeColors, int amount, int numRotated, int numNegative);
-	int count_color(const std::set<Point>& region, int color);
-	bool place_stars(int color, int amount);
-	bool has_star(const std::set<Point>& region, int color);
-	bool checkStarZigzag(std::shared_ptr<Panel> panel);
-	bool place_triangles(int color, int amount, int targetCount);
-	int count_sides(Point pos);
-	bool place_arrows(int color, int amount, int targetCount);
-	int count_crossings(Point pos, Point dir);
-	bool place_erasers(const std::vector<int>& colors, const std::vector<int>& eraseSymbols);
+	bool place_shapes(const std::vector<Deco::Color>& colors, const std::vector<Deco::Color>& negativeColors, int amount, int numRotated, int numNegative);
+
+	int count_color(const std::set<Point>& region, Deco::Color color) const;
+
+	bool place_stars(DecoPair dp); // TODO: Investigate making const&
+	bool has_star(const std::set<Point>& region, Deco::Color color) const;
+	bool checkStarZigzag(std::shared_ptr<Panel> panel) const;
+
+	bool place_triangles(DecoPair dp); // TODO: Investigate making const&
+	int count_sides(Point pos) const;
+
+	bool place_arrows(DecoPair dp); // TODO: Investigate making const&
+	int count_crossings(Point pos, Point dir) const;
+
+	bool place_erasers(
+		const std::vector<Deco::Color>& colors,
+		const std::vector<Deco::Deco>& eraseSymbols,
+	  /*out*/ std::vector<Point>& placedSymbols);
 	bool combine_shapes(std::vector<Shape>& shapes);
 
-	std::shared_ptr<Panel> _panel;
+	std::shared_ptr<Panel> _panel{nullptr}; // TODO: Investigate making this unique or a reference. The Generator Has-A panel every time, right?
 	std::vector<std::vector<int>> _custom_grid;
-	int _width, _height;
+	int _width{0};
+	int _height{0};
 	Panel::Symmetry _symmetry;
 	std::set<Point> _starts, _exits;
 	std::set<Point> _gridpos, _openpos;
 	std::set<Point> _path, _path1, _path2;
-	bool _fullGaps, _bisect;
-	int _stoneTypes;
+	bool _bisect {false}; // Used only to communicate between place_all_symbols() and place_stones()
+	int _stoneTypes{0}; // Used only to communicate between place_all_symbols() and place_stones()
 	int _config;
 	int _oneTimeAdd, _oneTimeRemove;
 	long _seed;
 	std::vector<Point> _splitPoints;
-	bool _allowNonMatch; //Used for multi-generator
-	int _parity;
+	bool _allowNonMatch{false}; //Used for multi-generator
+	int _parity{-1}; // Non-full-dots until told otherwise. Could probably become an enum.
 	std::vector<std::vector<Point>> _obstructions;
-	bool colorblind;
+	bool colorblind{false};
 
-	HWND _handle;
-	int _areaTotal, _genTotal, _areaPuzzles, _totalPuzzles;
+// Variables that track the overall process of generation and display on the GUI.
+// These should probably be extracted from the class.
+	HWND _handle{nullptr};
+	unsigned int _areaTotal{0};
+	unsigned int _genTotal{0};
+	unsigned int _totalPuzzles{0};
+	unsigned int _areaPuzzles{0};
 	std::wstring _areaName;
 
 	friend class PuzzleList;
+	friend class NormalPuzzleList; // Investigate what it takes to remove this.
+	friend class HardPuzzleList; // Investigate what it takes to remove this.
 	friend class Special;
 	friend class MultiGenerate;
 };

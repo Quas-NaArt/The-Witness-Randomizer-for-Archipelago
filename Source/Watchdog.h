@@ -97,8 +97,7 @@ public:
 };
 class ArrowWatchdog : public Watchdog {
 public:
-	ArrowWatchdog(int id);
-	ArrowWatchdog(int id, int pillarWidth);
+	ArrowWatchdog(int id, int pillarWidth = 0);
 
 	virtual void action();
 	void initPath();
@@ -109,13 +108,13 @@ public:
 	std::vector<std::vector<int>> backupGrid;
 	std::vector<std::vector<int>> grid;
 	int width, height, pillarWidth;
-	int tracedLength;
-	bool complete;
+	int tracedLength{0};
+	bool complete{false};
 	int style;
-	std::vector<int> exits;
+	std::vector<int> exits; // int is the panel's exit location index type, for some reason
 	int exitPoint;
 	std::vector<int> symmetryData;
-	std::vector<struct Point> DIRECTIONS;
+	const static std::array<struct Point, 8>& kDirections;
 };
 
 class BridgeWatchdog : public Watchdog {

@@ -23,7 +23,11 @@ template <class T> struct MemoryWrite {
 	int id;
 	int offset;
 	std::vector<T> data;
-	MemoryWrite(int id, int offset, const std::vector<T>& data) { this->id = id; this->offset = offset; this->data = data; }
+	MemoryWrite(int id, int offset, const std::vector<T>& data) 
+		: id{id}
+		, offset{offset}
+		, data{data}
+		{}
 };
 
 class Special {
@@ -31,15 +35,15 @@ class Special {
 public:
 	static std::map<int, int> correctShapesById;
 
-	Special(std::shared_ptr<Generate> generator) {
-		this->generator = generator;
-	}
+	Special(std::shared_ptr<Generate> generator) 
+		: generator{generator}
+		{};
 	
 	void generateSpecialSymMaze(std::shared_ptr<Generate> gen, int id);
-	void generateReflectionDotPuzzle(std::shared_ptr<Generate> gen, int id1, int id2, std::vector<std::pair<int, int>> symbols, Panel::Symmetry symmetry, bool split);
+	void generateReflectionDotPuzzle(std::shared_ptr<Generate> gen, int id1, int id2, std::vector<DecoPair> symbols, Panel::Symmetry symmetry, bool split);
 	void generateAntiPuzzle(int id);
-	void generateColorFilterPuzzle(int id, Point size, const std::vector<std::pair<int, int>>& symbols, const Color& filter, bool colorblind);
-	void generateColorfulColorFilterPuzzle(int id, Point size, const std::vector<std::pair<int, int>>& symbols, const Color& filter, bool colorblind);
+	void generateColorFilterPuzzle(int id, Point size, const std::vector<DecoPair>& symbols, const Color& filter, bool colorblind);
+	void generateColorfulColorFilterPuzzle(int id, Point size, const std::vector<DecoPair>& symbols, const Color& filter, bool colorblind);
 	void generateSoundDotPuzzle(int id, Point size, std::vector<int> dotSequence, bool writeSequence);
 	void generateSoundDotPuzzle(int id1, int id2, std::vector<int> dotSequence, bool writeSequence);
 	void generateSoundDotReflectionPuzzle(int id, Point size, std::vector<int> dotSequence1, std::vector<int> dotSequence2, int numColored, bool writeSequence);
@@ -50,9 +54,9 @@ public:
 	void generateRGBDotPuzzleH(int id);
 	void generateJungleVault(int id);
 	void generateApplePuzzle(int id, bool changeExit, bool flip);
-	void generateKeepLaserPuzzle(int id, const std::set<Point>& path1, const std::set<Point>& path2, const std::set<Point>& path3, const std::set<Point>& path4, std::vector<std::pair<int, int>> symbols);
-	void generateMountaintop(int id, const std::vector<std::pair<int, int>>& symbolVec);
-	void generateMultiPuzzle(std::vector<int> ids, const std::vector<std::vector<std::pair<int, int>>>& symbolVec, bool flip);
+	void generateKeepLaserPuzzle(int id, const std::set<Point>& path1, const std::set<Point>& path2, const std::set<Point>& path3, const std::set<Point>& path4, std::vector<DecoPair> symbols);
+	void generateMountaintop(int id, const std::vector<DecoPair>& symbolVec);
+	void generateMultiPuzzle(std::vector<int> ids, const std::vector<std::vector<DecoPair>>& symbolVec, bool flip);
 	bool generateMultiPuzzle(std::vector<int> ids, std::vector<Generate>& gens, const std::vector<PuzzleSymbols>& symbols, const std::set<Point>& path);
 	void generate2Bridge(int id1, int id2);
 	bool generate2Bridge(int id1, int id2, std::vector<std::shared_ptr<Generate>> gens);
@@ -60,7 +64,7 @@ public:
 	bool generate2BridgeH(int id1, int id2, std::vector<std::shared_ptr<Generate>> gens);
 	void generateMountainFloor();
 	void generateMountainFloorH();
-	void generatePivotPanel(int id, Point gridSize, const std::vector<std::pair<int, int>>& symbolVec, bool colorblind); //Too slow right now, only used a couple times in hard mode
+	void generatePivotPanel(int id, Point gridSize, const std::vector<DecoPair>& symbolVec, bool colorblind); //Too slow right now, only used a couple times in hard mode
 	void modifyGate(int id);
 	void addDecoyExits(std::shared_ptr<Generate> gen, int amount);
 	void initSSGrid(std::shared_ptr<Generate> gen);
@@ -70,15 +74,15 @@ public:
 	bool checkDotSolvability(std::shared_ptr<Panel> panel1, std::shared_ptr<Panel> panel2, Panel::Symmetry correctSym);
 	void createArrowPuzzle(int id, int x, int y, int dir, int ticks, const std::vector<Point>& gaps);
 	void createArrowSecretDoor(int id);
-	void generateCenterPerspective(int id, const std::vector<std::pair<int, int>>& symbolVec, int symbolType);
-	void generateSpecularPuzzle(int id, int gridShape = DEFAULT_GRID, std::vector<std::pair<int, int>> shadows = {});
-	void generateSpecularPuzzle(int id, std::vector<std::pair<int, int>> shadows) { generateSpecularPuzzle(id, DEFAULT_GRID, shadows); }
+	void generateCenterPerspective(int id, const std::vector<DecoPair>& symbolVec, Deco::Symbol symbolType);
+	void generateSpecularPuzzle(int id, int gridShape = DEFAULT_GRID, std::vector<std::pair<int, int>> shadows = {}); // TODO: Convert the pair to Point
+	void generateSpecularPuzzle(int id, std::vector<std::pair<int, int>> shadows) { generateSpecularPuzzle(id, DEFAULT_GRID, shadows); } // TODO: Convert the pair to Point
 	void setPosition(int id, float x, float y, float z);
 	void setOrientation(int id, float yaw, float pitch, float roll);
 	void setOrientation(int id, float x, float y, float z, float w);
 	void setScale(int id, float scale);
-	std::vector<int> generatePathByConnections(std::vector<int>& connectionsA, std::vector<int>& connectionsB, std::vector<int>& flags, std::vector<int>& symmetry, std::vector<std::pair<int, int>> shadows);
-	bool isAmbiguous(std::vector<int>& path, std::vector<std::vector<int>>& solutions, std::vector<std::pair<int, int>> shadows);
+	std::vector<int> generatePathByConnections(std::vector<int>& connectionsA, std::vector<int>& connectionsB, std::vector<int>& flags, std::vector<int>& symmetry, std::vector<std::pair<int, int>> shadows); // TODO: convert the pair to Point
+	bool isAmbiguous(std::vector<int>& path, std::vector<std::vector<int>>& solutions, std::vector<std::pair<int, int>> shadows); // TODO: Convert the pair to Point
 	static void createText(int id, std::string text, std::vector<float>& intersections, std::vector<int>& connectionsA, std::vector<int>& connectionsB,
 		float left, float right, float top, float bottom);
 	static void drawText(int id, std::vector<float>& intersections, std::vector<int>& connectionsA, std::vector<int>& connectionsB, const std::vector<float>& finalLine);
@@ -87,18 +91,15 @@ public:
 
 	void test(); //For testing/debugging purposes only
 
-	static void setTarget(int puzzle, int target)
-	{
+	static void setTarget(int puzzle, int target) {
 		Memory::get()->WritePanelData(puzzle, TARGET, target + 1);
 	}
 
-	static void clearTarget(int puzzle)
-	{
+	static void clearTarget(int puzzle) {
 		Memory::get()->WritePanelData(puzzle, TARGET, 0);
 	}
 
-	static void copyTarget(int puzzle, int sourceTarget)
-	{
+	static void copyTarget(int puzzle, int sourceTarget) {
 		Memory::get()->WritePanelData(puzzle, TARGET, Memory::get()->ReadPanelData<int>(sourceTarget, TARGET));
 	}
 	static bool hasBeenPlayed() {
@@ -189,19 +190,4 @@ private:
 
 	std::shared_ptr<Generate> generator;
 
-	template <class T> T pick_random(std::vector<T>& vec) { return vec[Random::rand() % vec.size()]; }
-	template <class T> T pick_random(std::set<T>& set) { auto it = set.begin(); std::advance(it, Random::rand() % set.size()); return *it; }
-	template <class T> T pop_random(std::vector<T>& vec) {
-		int i = Random::rand() % vec.size();
-		T item = vec[i];
-		vec.erase(vec.begin() + i);
-		return item;
-	}
-	template <class T> T pop_random(std::set<T>& set) {
-		auto it = set.begin();
-		std::advance(it, Random::rand() % set.size());
-		T item = *it;
-		set.erase(item);
-		return item;
-	}
 };

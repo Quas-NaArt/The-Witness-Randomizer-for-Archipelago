@@ -6,33 +6,33 @@
 #include "Watchdog.h"
 #include <thread>
 #include "Utilities.h"
-#include "TextureLoader.h"
+//#include "TextureLoader.h"
 #include "ASMPayloadManager.h"
 
 void Special::generateSpecialSymMaze(std::shared_ptr<Generate> gen, int id) {
 	do {
 		gen->setFlagOnce(Generate::Config::DisableWrite);
-		generator->setSymbol(Decoration::Start, 0, 16);
-		generator->setSymbol(Decoration::Start, 22, 16);
-		generator->setSymbol(Decoration::Exit, 8, 0);
-		generator->setSymbol(Decoration::Exit, 14, 0);
+		generator->setSymbol(Deco::kStart, 0, 16);
+		generator->setSymbol(Deco::kStart, 22, 16);
+		generator->setSymbol(Deco::Deco(Deco::Symbol::Exit), 8, 0);
+		generator->setSymbol(Deco::Deco(Deco::Symbol::Exit), 14, 0);
 		generator->setFlagOnce(Generate::Config::ShortPath);
 		generator->generateMaze(0x0005C);
 	} while (generator->_path.count(Point(12, 16)));
 	std::shared_ptr<Panel> puzzle = gen->_panel;
 	for (int x = 0; x < puzzle->_width / 2; x++) {
 		for (int y = 0; y < puzzle->_height; y++) {
-			Point sp = puzzle->get_sym_point(x, y, Panel::Symmetry::Vertical);
+			Point sp = puzzle->get_sym_point({x, y}, Panel::Symmetry::Vertical);
 			if (puzzle->_grid[sp.first][sp.second] & Decoration::Gap) {
 				puzzle->_grid[x][y] = puzzle->_grid[sp.first][sp.second];
-				puzzle->_grid[sp.first][sp.second] = 0;
+				puzzle->_grid[sp.first][sp.second] = Deco::kEmpty;
 			}
 		}
 	}
 	gen->write(id);
 }
 
-void Special::generateReflectionDotPuzzle(std::shared_ptr<Generate> gen, int id1, int id2, std::vector<std::pair<int, int>> symbols, Panel::Symmetry symmetry, bool split)
+void Special::generateReflectionDotPuzzle(std::shared_ptr<Generate> gen, int id1, int id2, std::vector<DecoPair> symbols, Panel::Symmetry symmetry, bool split)
 {
 	Memory* memory = Memory::get();
 
@@ -43,31 +43,49 @@ void Special::generateReflectionDotPuzzle(std::shared_ptr<Generate> gen, int id1
 	std::vector<Point> dots;
 	for (int x = 0; x < puzzle->_width; x++) {
 		for (int y = 0; y < puzzle->_height; y++) {
-			Point sp = puzzle->get_sym_point(x, y, symmetry);
-			if (puzzle->_grid[x][y] & Decoration::Dot) {
-				int symbol = (sp.first & 1) == 1 ? Decoration::Dot_Row : (sp.second & 1) == 1 ? Decoration::Dot_Column : Decoration::Dot_Intersection;
-				flippedPuzzle->_grid[sp.first][sp.second] = symbol | IntersectionFlags::DOT_IS_INVISIBLE;
+			Point sp = puzzle->get_sym_point({x, y}, symmetry);
+			if (puzzle->_grid[x][y] | static_cast<int>(Deco::Symbol::Dot)) {
+				auto symbol = Deco::Dot(Deco::Location::Any, Deco::Parity::Any, true);
+				if (sp.spot() == Point::Row) {
+					symbol.location = Deco::Location::Row;
+				} else if (sp.spot() == Point::Column) {
+					symbol.location = Deco::Location::Column;
+				} else if (sp.spot() == Point::Intersection) {
+					symbol.location = Deco::Location::Intersection;
+				} else {
+					throw std::exception("There should not be a dot at this location");
+				}
+				flippedPuzzle->_grid[sp.first][sp.second] = symbol;
 				dots.push_back({ x, y });
 			}
-			else if (puzzle->_grid[x][y] & Decoration::Gap) {
-				int symbol = (sp.first & 1) == 1 ? Decoration::Gap_Row : Decoration::Gap_Column;
+			else if (puzzle->_grid[x][y] | static_cast<int>(Deco::Symbol::Gap)) {
+				auto symbol = Deco::Gap();
+				if (sp.spot() == Point::Row) {
+					symbol.location = Deco::Location::Row;
+				} else if (sp.spot() == Point::Column) {
+					symbol.location = Deco::Location::Column;
+				} else {
+					throw std::exception("There should not be a gap at this location");
+				}
 				flippedPuzzle->_grid[sp.first][sp.second] = symbol;
 			}
 			else flippedPuzzle->_grid[sp.first][sp.second] = puzzle->_grid[x][y];
 		}
 	}
 	if (split) {
-		int size = static_cast<int>(dots.size());
-		while (dots.size() > size / 2 + Random::rand() % 2) {
-			Point dot = pop_random(dots);
-			Point sp = puzzle->get_sym_point(dot.first, dot.second, symmetry);
-			puzzle->_grid[dot.first][dot.second] |= IntersectionFlags::DOT_IS_INVISIBLE;
-			flippedPuzzle->_grid[sp.first][sp.second] &= ~IntersectionFlags::DOT_IS_INVISIBLE;
+		size_t size = dots.size();
+		// size_t stoplimit = dots.size()/2 + Random::rand()%2;
+		// while (dots.size() > stoplimit) {
+		while (dots.size() > size / 2 + Random::rand() % 2) { // Why is rand() being called every single loop?
+			Point dot = Utilities::pop_random(dots);
+			Point sp = puzzle->get_sym_point({dot.first, dot.second}, symmetry);
+			puzzle->_grid[dot.first][dot.second] |= IntersectionFlags::DOT_IS_INVISIBLE; // set the flag
+			flippedPuzzle->_grid[sp.first][sp.second] &= ~IntersectionFlags::DOT_IS_INVISIBLE; // remove the flag
 		}
 		if (Random::rand() % 2) {
-			Point dot = pop_random(dots);
-			Point sp = puzzle->get_sym_point(dot.first, dot.second, symmetry);
-			flippedPuzzle->_grid[sp.first][sp.second] &= ~IntersectionFlags::DOT_IS_INVISIBLE;
+			Point dot = Utilities::pop_random(dots);
+			Point sp = puzzle->get_sym_point(dot, symmetry);
+			flippedPuzzle->_grid[sp.first][sp.second] &= ~IntersectionFlags::DOT_IS_INVISIBLE; // set the flag
 		}
 		Color color = memory->ReadPanelData<Color>(id2, SUCCESS_COLOR_A);
 		memory->WritePanelData<Color>(id2, PATTERN_POINT_COLOR, { color });
@@ -78,7 +96,7 @@ void Special::generateReflectionDotPuzzle(std::shared_ptr<Generate> gen, int id1
 	}
 	flippedPuzzle->_endpoints.clear();
 	for (Endpoint p : puzzle->_endpoints) {
-		Point sp = puzzle->get_sym_point(p.GetX(), p.GetY(), symmetry);
+		Point sp = puzzle->get_sym_point({p.GetX(), p.GetY()}, symmetry);
 		flippedPuzzle->_endpoints.push_back(Endpoint(sp.first, sp.second, gen->_panel->get_sym_dir(p.GetDir(), symmetry),
 			IntersectionFlags::ENDPOINT | (p.GetDir() == Endpoint::Direction::UP || p.GetDir() == Endpoint::Direction::DOWN ? IntersectionFlags::COLUMN : IntersectionFlags::ROW)));
 	}
@@ -92,18 +110,20 @@ void Special::generateReflectionDotPuzzle(std::shared_ptr<Generate> gen, int id1
 	flippedPuzzle->Write(id2);
 }
 
+// Used only for the Swamp Exit Shortcut second panel
+
 void Special::generateAntiPuzzle(int id)
 {
 	while (true) {
 		generator->setFlagOnce(Generate::Config::DisableWrite);
-		generator->generate(id, { {Decoration::Poly | Decoration::Can_Rotate, 2} });
+		generator->generate(id, { DecoPair{Deco::Poly{Deco::Color::Any, true, false}, 2} });
 		std::set<Point> open = generator->_gridpos;
 		std::vector<int> symbols;
-		for (int x = 1; x < generator->_panel->_width; x += 2) {
-			for (int y = 1; y < generator->_panel->_height; y += 2) {
-				if (generator->get_symbol_type(generator->get(x, y)) == Decoration::Poly) {
-					symbols.push_back(generator->get(x, y));
-					generator->set(x, y, 0);
+		for (int x = 1; x < generator->_panel->width; x += 2) {
+			for (int y = 1; y < generator->_panel->height; y += 2) {
+				if (generator->get_symbol_type(generator->get({x, y})) == Decoration::Poly) {
+					symbols.push_back(generator->get({x, y}));
+					generator->set({x, y}, Deco::kEmpty);
 					for (Point p : generator->get_region(Point(x, y))) {
 						open.erase(p);
 					}
@@ -114,23 +134,25 @@ void Special::generateAntiPuzzle(int id)
 		std::set<Point> region = generator->get_region(*open.begin());
 		if (region.size() != open.size() || open.size() < symbols.size() + 1) continue;
 		for (int s : symbols) {
-			Point p = generator->pick_random(open);
+			Point p = Utilities::pick_random(open);
 			generator->set(p, s | Decoration::Negative);
 			open.erase(p);
 		}
-		generator->set(generator->pick_random(open), Decoration::Poly | 0xffff0000); //Full block
+		generator->set(Utilities::pick_random(open), Decoration::Poly | 0xffff0000); //Full block
 		generator->write(id);
 		generator->resetConfig();
 		return;
 	}
 }
 
-void Special::generateColorFilterPuzzle(int id, Point size, const std::vector<std::pair<int, int>>& symbols, const Color& filter, bool colorblind)
+void Special::generateColorFilterPuzzle(int id, Point size, const std::vector<DecoPair>& symbols, const Color& filter, bool colorblind)
 {
 	generator->setFlagOnce(Generate::Config::DisableWrite);
-	generator->setGridSize(size.first, size.second);
+	generator->setGridSize(size);
 	generator->generate(id, symbols);
-	std::vector<Color> availableColors = { {0, 0, 0, 1} };
+
+	// Build the list of distinct colors visible through the input filter
+	std::vector<Color> availableColors = { {0, 0, 0, 1} }; // Black is always an option.
 	if (filter.r == 1) {
 		for (int i = 0; i < availableColors.size(); i++) {
 			Color c = availableColors[i];
@@ -154,8 +176,8 @@ void Special::generateColorFilterPuzzle(int id, Point size, const std::vector<st
 		std::swap(availableColors[i], availableColors[Random::rand() % availableColors.size()]);
 	}
 	std::vector<Color> symbolColors;
-	for (int y = generator->_panel->_height - 2; y>0; y -= 2) {
-		for (int x = 1; x < generator->_panel->_width - 1; x += 2) {
+	for (int y = generator->_panel->height - 2; y>0; y -= 2) {
+		for (int x = 1; x < generator->_panel->width - 1; x += 2) {
 			if (generator->get(x, y) == 0) symbolColors.push_back({ 0, 0, 0, 0 });
 			else symbolColors.push_back(availableColors[(generator->get(x, y) & 0xf) - 1]);
 		}
@@ -190,10 +212,10 @@ void Special::generateColorFilterPuzzle(int id, Point size, const std::vector<st
 
 // variant of the above, but with *any* color possible. Not just primary and secondary colors.
 // used for the second color filter panel in color bunker, where you shut the door to bring the rainbow of dots under magenta light.
-void Special::generateColorfulColorFilterPuzzle(int id, Point size, const std::vector<std::pair<int, int>>& symbols, const Color& filter, bool colorblind)
+void Special::generateColorfulColorFilterPuzzle(int id, Point size, const std::vector<DecoPair>& symbols, const Color& filter, bool colorblind)
 {
 	generator->setFlagOnce(Generate::Config::DisableWrite);
-	generator->setGridSize(size.first, size.second);
+	generator->setGridSize(size);
 	generator->generate(id, symbols);
 	std::vector<Color> availableColors = { {0, 0, 0, 1} };
 	if (filter.r == 1) {
@@ -221,8 +243,8 @@ void Special::generateColorfulColorFilterPuzzle(int id, Point size, const std::v
 	}
 	std::vector<Color> symbolColors;
 	//availablecolors.erase_if(a)
-	for (int y = generator->_panel->_height - 2; y > 0; y -= 2) {
-		for (int x = 1; x < generator->_panel->_width - 1; x += 2) {
+	for (int y = generator->_panel->height - 2; y > 0; y -= 2) {
+		for (int x = 1; x < generator->_panel->width - 1; x += 2) {
 			if (generator->get(x, y) == 0) symbolColors.push_back({ 0, 0, 0, 0 });
 			else symbolColors.push_back(availableColors[(generator->get(x, y) & 0xf) - 1]);
 		}
@@ -266,15 +288,21 @@ void Special::generateSoundDotPuzzle(int id, Point size, std::vector<int> dotSeq
 	generator->resetConfig();
 	generator->setFlagOnce(Generate::Config::DisableWrite);
 	generator->setFlagOnce(Generate::Config::LongPath);
-	generator->setGridSize(size.first, size.second);
+	generator->setGridSize(size);
 	if (id == 0x014B2) { //Have to force there to only be one correct sequence
-		generator->generate(id, { {Decoration::Dot_Intersection, static_cast<int>(dotSequence.size() - 1)} });
-		while (generator->get(6, 0) == Decoration::Dot_Intersection || generator->get(8, 2) == Decoration::Dot_Intersection)
-			generator->generate(id, { {Decoration::Dot_Intersection, static_cast<int>(dotSequence.size() - 1)} });
-		if (generator->get(7, 0) == PATH) generator->set(7, 0, Decoration::Dot_Row);
-		else generator->set(8, 1, Decoration::Dot_Column);
+		generator->generate(id, { DecoPair{Deco::Dot(Deco::Location::Intersection), static_cast<int>(dotSequence.size() - 1)} });
+		while (generator->get(6, 0) == Decoration::Dot_Intersection || 
+			   generator->get(8, 2) == Decoration::Dot_Intersection) {
+			generator->generate(id, { DecoPair{Deco::Dot(Deco::Location::Intersection), static_cast<int>(dotSequence.size() - 1)} });
+		}
+		if (generator->get(7, 0) == Deco::kPath) {
+			generator->set(7, 0, Decoration::Dot_Row);
+		} else {
+			generator->set(8, 1, Decoration::Dot_Column);
+		}
+	} else {
+		generator->generate(id, { DecoPair{Deco::Dot(Deco::Location::Intersection), static_cast<int>(dotSequence.size())} });
 	}
-	else generator->generate(id, { {Decoration::Dot_Intersection, static_cast<int>(dotSequence.size())} });
 	Point p = *generator->_starts.begin();
 	std::set<Point> path = generator->_path;
 	int seqPos = 0;
@@ -314,21 +342,23 @@ void Special::generateSoundDotReflectionPuzzle(int id, Point size, std::vector<i
 	generator->setFlagOnce(Generate::Config::DisableWrite);
 	generator->setFlagOnce(Generate::Config::LongPath);
 	generator->setSymmetry(Panel::Symmetry::Rotational);
-	generator->setGridSize(size.first, size.second);
+	generator->setGridSize(size);
 	if (id != 0x00AFB) {
 		memory->WritePanelData(id, SUCCESS_COLOR_B, memory->ReadPanelData<Color>(id, SUCCESS_COLOR_A));
-		generator->setSymbol(Decoration::Start, 0, generator->_height - 1); generator->setSymbol(Decoration::Start, generator->_width - 1, 0);
-		generator->setSymbol(Decoration::Exit, 0, 0); generator->setSymbol(Decoration::Exit, generator->_width - 1, generator->_height - 1);
+		generator->setSymbol(Deco::kStart, 0, generator->_height - 1); generator->setSymbol(Deco::kStart, generator->_width - 1, 0);
+		generator->setSymbol(Deco::kExit, 0, 0); generator->setSymbol(Deco::kExit, generator->_width - 1, generator->_height - 1);
 	}
 	if (id == 0x00C41 || id == 0x014B2) { //Generate with one less dot than the pattern (for set start/exit)
-		generator->generate(id, { {Decoration::Dot_Intersection | Decoration::Color::Blue, static_cast<int>(dotSequence1.size() - 1)}, {Decoration::Dot_Intersection | Decoration::Color::Yellow, static_cast<int>(dotSequence2.size() - 1) }
+		generator->generate(id, { DecoPair{Deco::Dot(Deco::Location::Any, Deco::Parity::Blue), static_cast<int>(dotSequence1.size() - 1)},
+								  DecoPair{Deco::Dot(Deco::Location::Any, Deco::Parity::Orange), static_cast<int>(dotSequence2.size() - 1) }
 	});
 	}
 	else if (id == 0x00AFB && writeSequence) { //Shipwreck Expert
 		while (!generateSoundDotReflectionSpecial(id, size, dotSequence1, dotSequence2, numColored));
 		return;
 	}
-	else generator->generate(id, { {Decoration::Dot_Intersection | Decoration::Color::Blue, static_cast<int>(dotSequence1.size())}, {Decoration::Dot_Intersection | Decoration::Color::Yellow, static_cast<int>(dotSequence2.size()) }
+	else generator->generate(id, { DecoPair{Deco::Dot(Deco::Location::Any, Deco::Parity::Blue), static_cast<int>(dotSequence1.size())},
+								   DecoPair{Deco::Dot(Deco::Location::Any, Deco::Parity::Orange), static_cast<int>(dotSequence2.size()) }
 });
 	std::set<Point> path1 = generator->_path1, path2 = generator->_path2;
 	Point p1, p2;
@@ -338,8 +368,8 @@ void Special::generateSoundDotReflectionPuzzle(int id, Point size, std::vector<i
 		if (generator->_path2.count(p)) p2 = p;
 	}
 	if (id == 0x00C41) {
-		generator->set(p1, Decoration::Dot_Intersection);
-		generator->set(p2, Decoration::Dot_Intersection);
+		generator->set(p1, Deco::Dot());
+		generator->set(p2, Deco::Dot());
 	}
 	int seqPos = 0;
 	while (!generator->_exits.count(p1)) {
@@ -380,11 +410,11 @@ void Special::generateSoundDotReflectionPuzzle(int id, Point size, std::vector<i
 	}
 	for (int i = static_cast<int>(dotSequence1.size() + dotSequence2.size()); i > numColored; i--) {
 		if (i % 2 == 0) { //Want to evenly distribute colors between blue/orange (approximately)
-			Point p = pop_random(dots1);
+			Point p = Utilities::pop_random(dots1);
 			generator->set(p, generator->get(p) & ~DOT_IS_BLUE); //Remove color
 		}
 		else {
-			Point p = pop_random(dots2);
+			Point p = Utilities::pop_random(dots2);
 			generator->set(p, generator->get(p) & ~DOT_IS_ORANGE); //Remove color
 		}
 	}
@@ -418,13 +448,14 @@ bool Special::generateSoundDotReflectionSpecial(int id, Point size, std::vector<
 	generator->setFlagOnce(Generate::Config::DisableWrite);
 	generator->setFlagOnce(Generate::Config::LongPath);
 	generator->setSymmetry(Panel::Symmetry::RotateLeft);
-	generator->setGridSize(size.first, size.second);
+	generator->setGridSize(size);
 	std::vector<Point> starts = { { 0, 0 },{ generator->_width - 1, 0 },{ 0, generator->_height - 1 },{ generator->_width - 1, generator->_height - 1 } };
-	Point start = pick_random<Point>(starts);
-	generator->setSymbol(Decoration::Start, start.first, start.second);
-	generator->setSymbol(Decoration::Exit, 6, 0); generator->setSymbol(Decoration::Exit, generator->_width - 1, 6);
-	generator->setSymbol(Decoration::Exit, 0, generator->_height - 7); generator->setSymbol(Decoration::Exit, generator->_width - 7, generator->_height - 1);
-	generator->generate(id, { {Decoration::Dot_Intersection | Decoration::Color::Blue, static_cast<int>(dotSequence1.size() - 1)}, {Decoration::Dot_Intersection | Decoration::Color::Yellow, static_cast<int>(dotSequence2.size() - 1)} });
+	Point start = Utilities::pick_random<Point>(starts);
+	generator->setSymbol(Deco::kStart, start);
+	generator->setSymbol(Deco::kExit, 6, 0); generator->setSymbol(Deco::kExit, generator->_width - 1, 6);
+	generator->setSymbol(Deco::kExit, 0, generator->_height - 7); generator->setSymbol(Deco::kExit, generator->_width - 7, generator->_height - 1);
+	generator->generate(id, { DecoPair{Deco::Dot(Deco::Location::Any, Deco::Parity::Blue), static_cast<int>(dotSequence1.size() - 1)},
+							  DecoPair{Deco::Dot(Deco::Location::Any, Deco::Parity::Yellow), static_cast<int>(dotSequence2.size() - 1)} });
 	std::set<Point> path1 = generator->_path1, path2 = generator->_path2;
 	std::set<Point> intersect;
 	for (Point p : path1) {
@@ -436,8 +467,8 @@ bool Special::generateSoundDotReflectionSpecial(int id, Point size, std::vector<
 			intersect.insert(p);
 		}
 	}
-	Point pshared = pick_random(intersect);
-	generator->set(pshared, Decoration::Dot_Intersection);
+	Point pshared = Utilities::pick_random(intersect);
+	generator->set(pshared, Deco::Dot(Deco::Location::Intersection));
 	Point p1 = start, p2 = generator->get_sym_point(start);
 	std::set<Point> dots1, dots2;
 
@@ -483,11 +514,11 @@ bool Special::generateSoundDotReflectionSpecial(int id, Point size, std::vector<
 	generator->set(pshared, generator->get(pshared) & (~DOT_IS_BLUE | DOT_IS_ORANGE));
 	for (int i = static_cast<int>(dotSequence1.size() + dotSequence2.size()) - 2; i > numColored; i--) {
 		if (i % 2 == 0) { //Want to evenly distribute colors between blue/orange (approximately)
-			Point p = pop_random(dots1);
+			Point p = Utilities::pop_random(dots1);
 			generator->set(p, generator->get(p) & ~DOT_IS_BLUE); //Remove color
 		}
 		else {
-			Point p = pop_random(dots2);
+			Point p = Utilities::pop_random(dots2);
 			generator->set(p, generator->get(p) & ~DOT_IS_ORANGE); //Remove color
 		}
 	}
@@ -511,50 +542,103 @@ bool Special::generateSoundDotReflectionSpecial(int id, Point size, std::vector<
 	return true;
 }
 
-void Special::generateRGBStonePuzzleN(int id)
-{
+// Town RGB Room
+void Special::generateRGBStonePuzzleN(int id) {
+	unsigned int limit = 1'000'000;
 	while (true) {
 		generator->setFlagOnce(Generate::Config::DisableWrite);
-		generator->generate(id);
+		generator->generate(id);  // Draw a path
 		int amount = 16;
-		std::set<Decoration::Color> used;
-		std::vector<Decoration::Color> colors = { Decoration::Black, Decoration::White, Decoration::Red, Decoration::Green, Decoration::Blue, Decoration::Cyan, Decoration::Yellow, Decoration::Magenta };
-		while (amount > 0) {
-			Decoration::Color c = generator->pick_random(colors);
-			if (generator->place_stones(c, 1)) {
+		int minimumColors = 5;
+
+		std::vector<Deco::Color> all_colors{
+			Deco::Color::Black,
+			Deco::Color::White,
+			Deco::Color::Red,
+			Deco::Color::Green,
+			Deco::Color::Blue,
+			Deco::Color::Cyan,
+			Deco::Color::Yellow,
+			Deco::Color::Magenta,
+		};
+		auto unused_colors{all_colors};
+
+		// Insist that the first 5 colors are all different.
+		while (minimumColors > 0 && !unused_colors.empty()) {
+			int rand_unused_idx = Random::rand() % unused_colors.size();
+			Deco::Color c = unused_colors[rand_unused_idx];
+			if (generator->place_stones({Deco::Stone(c), 1})) {
+				unused_colors.erase(unused_colors.begin() + rand_unused_idx -
+									1);  // pop the used color
 				amount--;
-				used.insert(c);
+				minimumColors--;
 			}
 		}
-		if (used.size() < 5) continue;
+
+		// Fill in the rest of the stones, knowing we've already met the minimum
+		// of colors in one pass.
+		while (amount > 0 && !all_colors.empty()) {
+			int color_idx = Random::rand() % unused_colors.size();
+			Deco::Color c = unused_colors[color_idx];
+			if (generator->place_stones({Deco::Stone(c), 1})) {
+				amount--;
+			} else {
+				// Could not place this color. Don't try again.
+				all_colors.erase(all_colors.begin() + color_idx - 1);
+			}
+		}
+		if (amount > 0) {
+			--limit;
+			continue;  // while (true)
+		}
 		generator->setFlagOnce(Generate::Config::WriteColors);
 		generator->write(id);
 		return;
 	}
+	throw std::exception(
+		"generateRGBStonePuzzleN surpassed computation limits");
 }
 
+// Town RGB Room
 void Special::generateRGBStarPuzzleN(int id)
 {
-	while (true) {
-		generator->setFlagOnce(Generate::Config::DisableWrite);
-		generator->generate(id);
-		int amount = 16;
-		std::set<Decoration::Color> used;
-		std::set<Decoration::Color> colors = { Decoration::Black, Decoration::White, Decoration::Red, Decoration::Green, Decoration::Blue, Decoration::Cyan, Decoration::Yellow, Decoration::Magenta };
-		while (amount > 0) {
-			Decoration::Color c = generator->pick_random(colors);
-			if (generator->place_stars(c, 2)) {
-				amount -= 2;
-				used.insert(c);
-				if (used.size() == 4) colors = used;
-			}
+	generator->setFlagOnce(Generate::Config::DisableWrite);
+	generator->generate(id);
+	int amount = 16;
+	int minimumColors = 4;
+	std::vector<Deco::Color> used_colors;
+	std::vector<Deco::Color> unused_colors = {
+		Deco::Color::Black,
+		Deco::Color::White,
+		Deco::Color::Red,
+		Deco::Color::Green,
+		Deco::Color::Blue,
+		Deco::Color::Cyan,
+		Deco::Color::Yellow,
+		Deco::Color::Magenta,
+	};
+
+	// Pick the minimum number of unique colors first, placing 2 stars at a time
+	while (minimumColors > 0 && !unused_colors.empty()) {
+		int rand_unused_idx = Random::rand() % unused_colors.size();
+		Deco::Color c = unused_colors[rand_unused_idx];
+		if (generator->place_stars(DecoPair{Deco::Star(c), 2})) {
+			used_colors.push_back(unused_colors[rand_unused_idx]); // push the used color
+			unused_colors.erase(unused_colors.begin() + rand_unused_idx - 1); // pop the used color
+			amount -= 2;
+			minimumColors--;
 		}
-		if (used.size() < 4)
-			continue;
-		generator->setFlagOnce(Generate::Config::WriteColors);
-		generator->write(id);
-		return;
 	}
+	// Fill in the rest of the stars, knowing we've already met the minimum of colors in one pass.
+	while (amount > 0) {
+		int rand_unused_idx = Random::rand() % unused_colors.size();
+		Deco::Color c = unused_colors[rand_unused_idx];
+		if (generator->place_stars(DecoPair{Deco::Star(c), 2})) {
+			amount -= 2;
+		}
+	}
+	generator->setFlagOnce(Generate::Config::WriteColors);
+	generator->write(id);
 }
 
 void Special::generateRGBStonePuzzleH(int id) {
@@ -562,28 +646,56 @@ void Special::generateRGBStonePuzzleH(int id) {
 		generator->setFlagOnce(Generate::Config::DisableWrite);
 		generator->generate(id);
 		int amount = 10;
-		std::set<Decoration::Color> used;
-		std::vector<Decoration::Color> colors = { Decoration::Black, Decoration::Red, Decoration::Green, Decoration::Blue, Decoration::Magenta, Decoration::Yellow };
-		while (amount > 0) {
-			Decoration::Color c = generator->pick_random(colors);
-			if (generator->place_stones(c, 1)) {
+		int minimumColors = 5;
+		std::vector<Deco::Color> all_colors = {
+			Deco::Color::Black,
+			Deco::Color::Red,
+			Deco::Color::Green,
+			Deco::Color::Blue,
+			Deco::Color::Magenta,
+			Deco::Color::Yellow };
+		auto unused_colors{all_colors};
+
+		// Insist that the first 5 colors are all different.
+		while (minimumColors > 0 && !unused_colors.empty()) {
+			int rand_unused_idx = Random::rand() % unused_colors.size();
+			Deco::Color c = unused_colors[rand_unused_idx];
+			if (generator->place_stones({ Deco::Stone(c), 1 })) {
+				unused_colors.erase(unused_colors.begin() + rand_unused_idx - 1); // pop the used color
 				amount--;
-				used.insert(c);
+				minimumColors--;
 			}
 		}
-		if (used.size() < 5) continue;
-		if (!generator->place_erasers({ Decoration::Color::White }, { Decoration::Stone | pick_random(colors) })) {
+
+		// Fill in the rest of the stones, knowing we've already met the minimum of colors in one pass.
+		while (amount > 0) {
+			Deco::Color c = Utilities::pick_random(all_colors);
+			if (generator->place_stones({ Deco::Stone(c), 1 })) {
+				amount--;
+			}
+		}
+
+		// Erasers may be any of the allowed colors, but attempting to place one may still fail.
+		bool eraser_placed = false;
+		std::vector<Point> placed_erasers; // To be filled by place_erasers(). A refactor to use a tuple return instead of out& style is possible.
+		for (int eraser_placement_limit = 24; eraser_placement_limit > 0 && !eraser_placed; --eraser_placement_limit) {
+			// Try replacing only the eraser a few times before rerolling the whole panel.
+			eraser_placed = generator->place_erasers({Deco::Color::White}, {Deco::Deco(Deco::Symbol::Stone, Utilities::pick_random(all_colors))}, placed_erasers);
+		}
+		if (!eraser_placed) {
+			// Replacing just the eraser didn't converge in time. Reroll the path and all symbols.
 			continue;
 		}
-		Point eraserPos;
-		for (int x = 1; x < generator->_panel->_width; x += 2) {
-			for (int y = 1; y < generator->_panel->_height; y += 2) {
-				if (generator->get_symbol_type(generator->get(x, y)) == Decoration::Eraser) {
-					eraserPos = { x, y };
-					break;
-				}
-			}
-		}
+		Point eraserPos = placed_erasers[0]; // since we only placed one
+		// // Oops, we forgot where we placed that eraser. Time to look for it.
+		// for (int x = 1; x < generator->_panel->width; x += 2) {
+		// 	for (int y = 1; y < generator->_panel->height; y += 2) {
+		// 		if (generator->get_symbol_type(generator->get(x, y)) == Decoration::Eraser) {
+		// 			eraserPos = { x, y };
+		// 			break;
+		// 		}
+		// 	}
+		// }
 		int count = 0;
 		for (Point dir : generator->_DIRECTIONS2) {
 			if (!generator->off_edge(eraserPos + dir) && generator->get(eraserPos + dir) == 0) count++;
@@ -605,10 +717,13 @@ void Special::generateRGBDotPuzzleH(int id) {
 	memory->WritePanelData<float>(id, REFLECTION_PATH_COLOR, { 1, 1, 0, 1 });
 	generator->setGridSize(7, 7);
 	generator->setSymmetry(Panel::Symmetry::Rotational);
-	generator->setSymbol(Decoration::Exit, 0, 14); generator->setSymbol(Decoration::Exit, 14, 0);
-	generator->setSymbol(Decoration::Exit, 0, 0); generator->setSymbol(Decoration::Exit, 14, 14);
-	generator->generate(id, { {Decoration::Dot_Intersection | Decoration::Color::Cyan, 2}, {Decoration::Dot_Intersection | Decoration::Color::Yellow, 4}, {Decoration::Dot_Intersection, 6},
-		{Decoration::Triangle | Decoration::Color::Orange, 4}, {Decoration::Start, 4} });
+	generator->setSymbol(Deco::kExit, 0, 14); generator->setSymbol(Deco::kExit, 14, 0);
+	generator->setSymbol(Deco::kExit, 0, 0); generator->setSymbol(Deco::kExit, 14, 14);
+	generator->generate(id, {DecoPair{Deco::Dot(Deco::Parity::Cyan), 2},
+							 DecoPair{Deco::Dot(Deco::Parity::Yellow), 4},
+							 DecoPair{Deco::Dot(), 6},
+							 DecoPair{Deco::Triangle(Deco::Color::Orange, 0), 4},
+							 DecoPair{Deco::kStart, 4} });
 	generator->resetConfig();
 }
 
@@ -628,10 +743,10 @@ void Special::generateJungleVault(int id)
 	generator->initPanel(id);
 	generator->clear();
 	int sol = Random::rand() % sols.size();
-	auto[x1, y1] = generator->_panel->loc_to_xy(generator->pick_random(dotPoints1[sol]));
-	auto[x2, y2] = generator->_panel->loc_to_xy(generator->pick_random(dotPoints2[sol]));
-	generator->set(x1, y1, Decoration::Dot_Intersection);
-	generator->set(x2, y2, Decoration::Dot_Intersection);
+	auto[x1, y1] = generator->_panel->loc_to_xy(Utilities::pick_random(dotPoints1[sol]));
+	auto[x2, y2] = generator->_panel->loc_to_xy(Utilities::pick_random(dotPoints2[sol]));
+	generator->set(x1, y1, Deco::Dot(Deco::Location::Intersection));
+	generator->set(x2, y2, Deco::Dot(Deco::Location::Intersection));
 	memory->WritePanelData(id, SEQUENCE_LEN, static_cast<int>(sols[sol].size()));
 	memory->WriteArray(id, SEQUENCE, sols[sol], true);
 	generator->write(id);
@@ -651,7 +766,7 @@ void Special::generateApplePuzzle(int id, bool changeExit, bool flip)
 		for (int i = 15; i < 31; i++) {
 			if (intersectionFlags[i] == 9) exits.push_back(i);
 		}
-		int newExit = pop_random(exits);
+		int newExit = Utilities::pop_random(exits);
 		intersectionFlags[newExit] = 1;
 		intersectionFlags[exit] = 9; //Gets rid of old exit
 		for (int i = 5; i > 1; i--) {
@@ -683,7 +798,7 @@ void Special::generateApplePuzzle(int id, bool changeExit, bool flip)
 	}
 }
 
-void Special::generateKeepLaserPuzzle(int id, const std::set<Point>& path1, const std::set<Point>& path2, const std::set<Point>& path3, const std::set<Point>& path4, std::vector<std::pair<int, int>> symbols)
+void Special::generateKeepLaserPuzzle(int id, const std::set<Point>& path1, const std::set<Point>& path2, const std::set<Point>& path3, const std::set<Point>& path4, std::vector<DecoPair> symbols)
 {
 	PuzzleSymbols psymbols(symbols);
 	PuzzleSymbols psymbolsBackup = psymbols;
@@ -692,26 +807,31 @@ void Special::generateKeepLaserPuzzle(int id, const std::set<Point>& path1, cons
 	generator->setGridSize(10, 11);
 	generator->_starts = { { 0, 2 },{ 20, 10 },{ 8, 14 },{ 0, 22 },{ 20, 22 } };
 	generator->_exits = { { 0, 18 },{ 0, 0 },{ 20, 0 },{ 0, 12 } };
-	if (psymbols.getNum(Decoration::Triangle) > 0) generator->_exits.insert({ 0, 22 });
+	if (psymbols.symbols.contains(Deco::Symbol::Triangle)) {
+		generator->_exits.insert({ 0, 22 });
+	}
 	generator->initPanel(id);
 	generator->clear();
-	std::vector<Point> gaps = { { 17, 20 },{ 16, 19 },{ 20, 17 },{ 15, 14 },{ 15, 16 },{ 18, 13 },{ 20, 13 }, //Yellow Internal Puzzle Walls
-	{ 11, 12 }, { 11, 14 }, { 11, 16 }, { 11, 18 }, { 11, 20 }, { 11, 22 }, { 10, 13 }, { 10, 15 }, { 10, 17 }, { 10, 19 }, { 10, 21 }, { 12, 13 }, { 13, 12 }, { 16, 13 }, //Yellow External Puzzle Walls
-	{ 10, 11 },{ 12, 11 },{ 14, 11 },{ 16, 11 },{ 18, 11 },{ 11, 0 },{ 11, 2 },{ 11, 4 },{ 11, 8 },{ 11, 10 },{ 14, 1 },{ 16, 1 },{ 18, 1 },{ 20, 1 }, //Pink Puzzle Walls
-	{ 2, 1 },{ 4, 1 },{ 6, 1 },{ 8, 1 },{ 0, 11 },{ 2, 11 },{ 4, 11 },{ 6, 11 },{ 9, 2 },{ 9, 4 },{ 9, 6 },{ 9, 8 },{ 9, 10 },{ 9, 12 }, //Green Puzzle Walls
-	{ 0, 13 },{ 2, 13 },{ 4, 13 },{ 6, 13 },{ 9, 14 },{ 9, 16 },{ 9, 20 },{ 9, 22 }, //Blue Puzzle Walls
+	std::vector<Point> gaps = {
+		{ 17, 20 },{ 16, 19 },{ 20, 17 },{ 15, 14 },{ 15, 16 },{ 18, 13 },{ 20, 13 }, //Yellow Internal Puzzle Walls
+		{ 11, 12 }, { 11, 14 }, { 11, 16 }, { 11, 18 }, { 11, 20 }, { 11, 22 }, { 10, 13 }, { 10, 15 }, { 10, 17 }, { 10, 19 }, { 10, 21 }, { 12, 13 }, { 13, 12 }, { 16, 13 }, //Yellow External Puzzle Walls
+		{ 10, 11 },{ 12, 11 },{ 14, 11 },{ 16, 11 },{ 18, 11 },{ 11, 0 },{ 11, 2 },{ 11, 4 },{ 11, 8 },{ 11, 10 },{ 14, 1 },{ 16, 1 },{ 18, 1 },{ 20, 1 }, //Pink Puzzle Walls
+		{ 2, 1 },{ 4, 1 },{ 6, 1 },{ 8, 1 },{ 0, 11 },{ 2, 11 },{ 4, 11 },{ 6, 11 },{ 9, 2 },{ 9, 4 },{ 9, 6 },{ 9, 8 },{ 9, 10 },{ 9, 12 }, //Green Puzzle Walls
+		{ 0, 13 },{ 2, 13 },{ 4, 13 },{ 6, 13 },{ 9, 14 },{ 9, 16 },{ 9, 20 },{ 9, 22 }, //Blue Puzzle Walls
 	};
-	std::vector<Point> pathPoints = { { 14, 13 },{ 14, 12 },{ 15, 12 },{ 16, 12 },{ 17, 12 },{ 18, 12 },{ 19, 12 },{ 20, 12 },{ 20, 11 },
-	{ 11, 6 },{ 10, 6 },{ 10, 5 },{ 10, 4 },{ 10, 3 },{ 10, 2 },{ 10, 1 },{ 10, 0 },{ 9, 0 },{ 8, 0 },{ 7, 0 },{ 6, 0 },{ 5, 0 },{ 4, 0 },{ 3, 0 },
-	{ 2, 0 },{ 1, 0 },{ 0, 0 },{ 0, 1 },{ 8, 11 },{ 8, 12 },{ 8, 13 } };
+	std::vector<Point> pathPoints = {
+		{ 14, 13 },{ 14, 12 },{ 15, 12 },{ 16, 12 },{ 17, 12 },{ 18, 12 },{ 19, 12 },{ 20, 12 },{ 20, 11 },
+		{ 11, 6 },{ 10, 6 },{ 10, 5 },{ 10, 4 },{ 10, 3 },{ 10, 2 },{ 10, 1 },{ 10, 0 },{ 9, 0 },{ 8, 0 },{ 7, 0 },{ 6, 0 },{ 5, 0 },{ 4, 0 },{ 3, 0 },
+		{ 2, 0 },{ 1, 0 },{ 0, 0 },{ 0, 1 },{ 8, 11 },{ 8, 12 },{ 8, 13 } };
 	std::vector<Point> pathPoints2 = { { 9, 18 },{ 10, 18 } }; //For exiting out the right side of the last puzzle
 	std::vector<Point> pathPoints3 = { { 8, 14 },{ 7, 14 },{ 6, 14 },{ 5, 14 },{ 4, 14 },{ 3, 14 },{ 2, 14 },{ 1, 14 },{ 0, 14 },{ 0, 15 },{ 0, 16 },{ 0, 17 } }; //For hard mode
 	for (Point p : pathPoints) generator->set_path(p);
-	for (Point p : gaps) generator->set(p, p.first % 2 == 0 ? Decoration::Gap_Column : Decoration::Gap_Row);
+	for (Point p : gaps) generator->set(p, p.first % 2 == 0 ? Deco::Gap(Deco::Location::Column) : Deco::Gap(Deco::Location::Row));
 	for (Point p : path1) generator->set_path(Point(p.first + 12, p.second + 14));
 	for (Point p : path2) generator->set_path(Point(p.first + 12, p.second + 2));
 	for (Point p : path3) generator->set_path(Point(8 - p.first, 8 - p.second + 2));
-	if (psymbols.getNum(Decoration::Triangle) == 0) { //Normal mode
+	
+	if (!psymbols.symbols.contains(Deco::Symbol::Triangle)) { //Normal mode
 		for (Point p : path4) generator->set_path(Point(p.first, p.second + 14));
 		if (path4.count(Point({ 8, 4 }))) for (Point p : pathPoints2) generator->set_path(p);
 	}
@@ -721,10 +841,10 @@ void Special::generateKeepLaserPuzzle(int id, const std::set<Point>& path1, cons
 	}
 
 	std::vector<std::string> solution; //For debugging only
-	for (int y = 0; y < generator->_panel->_height; y++) {
+	for (int y = 0; y < generator->_panel->height; y++) {
 		std::string row;
-		for (int x = 0; x < generator->_panel->_width; x++) {
-			if (generator->get(x, y) == PATH) {
+		for (int x = 0; x < generator->_panel->width; x++) {
+			if (generator->get(x, y) == Deco::kPath) {
 				row += "xx";
 			}
 			else row += "    ";
@@ -733,19 +853,29 @@ void Special::generateKeepLaserPuzzle(int id, const std::set<Point>& path1, cons
 	}
 
 	while (!generator->place_all_symbols(psymbols)) {
-		for (int x = 0; x < generator->_panel->_width; x++)
-			for (int y = 0; y < generator->_panel->_height; y++)
-				if (generator->get(x, y) != PATH && (generator->get(x, y) & 0x1fffff) != Decoration::Gap)
-					generator->set(x, y, 0);
+		for (int x = 0; x < generator->_panel->width; x++) {
+			for (int y = 0; y < generator->_panel->height; y++) {
+				if (generator->get(x, y) != Deco::kPath && 
+					generator->get(x, y).symbol != Deco::Symbol::Gap) 
+				{
+					generator->set(x, y, Deco::kEmpty);
+				}
+			}
+		}
 		generator->_openpos = generator->_gridpos;
-		for (int i = 0; i < psymbols.symbols[Decoration::Poly].size(); i++) {
-			psymbols.symbols[Decoration::Poly][i].second = psymbolsBackup.symbols[Decoration::Poly][i].second + Random::rand() % 3 - Random::rand() % 3;
-			if (psymbols.symbols[Decoration::Poly][i].second < 1) psymbols.symbols[Decoration::Poly][i].second = 1;
+		for (int i = 0; i < psymbols[Deco::Symbol::Poly].size(); i++) {
+			psymbols[Deco::Symbol::Poly][i].second =
+				psymbolsBackup[Deco::Symbol::Poly][i].second +
+				Random::rand() % 3 - Random::rand() % 3; // Center-weighted (2 +/- 1)  with increased Variance?
+			if (psymbols[Deco::Symbol::Poly][i].second < 1) {
+				// std::clamp()
+				psymbols[Deco::Symbol::Poly][i].second = 1;
+			}
 		}
 	}
 
-	for (int x = 0; x < generator->_panel->_width; x++)
-		for (int y = 0; y < generator->_panel->_height; y++)
+	for (int x = 0; x < generator->_panel->width; x++)
+		for (int y = 0; y < generator->_panel->height; y++)
 			if ((generator->get(x, y) & 0x1fffff) == Decoration::Gap)
 				generator->set(x, y, IntersectionFlags::OPEN);
 	generator->set(10, 10, IntersectionFlags::GAP);
@@ -758,11 +888,12 @@ void Special::generateKeepLaserPuzzle(int id, const std::set<Point>& path1, cons
 	generator->set(10, 22, IntersectionFlags::NO_POINT);
 	generator->setFlagOnce(Generate::Config::EnableFlash);
 	generator->write(id);
-	if (psymbols.getNum(Decoration::Triangle) > 0) (new KeepWatchdog())->start();
+	if (psymbols.getNum(Deco::Symbol::Triangle) > 0) (new KeepWatchdog())->start();
 }
 
-void Special::generateMountaintop(int id, const std::vector<std::pair<int, int>>& symbolVec)
+void Special::generateMountaintop(int id, const std::vector<DecoPair>& symbolVec)
 {
+	// ULC are Upper, Lower, Center??
 	std::vector<std::vector<Point>> perspectiveU = {
 	{ { 0, 3 },{ 1, 2 },{ 1, 4 },{ 2, 1 },{ 2, 3 },{ 3, 2 },{4, 7}, { 6, 1 },{6, 7}, { 7, 0 },{ 7, 2 },{ 7, 4 },{7, 6}, { 8, 1 },{ 8, 3 },{ 8, 5 },{ 9, 2 },{ 9, 4 },{ 9, 6 } },
 	{ { 0, 3 },{ 0, 5 },{ 1, 2 },{ 1, 4 },{ 2, 1 },{ 2, 3 },{ 3, 2 },{ 3, 4 },{ 4, 3 },{ 4, 5 },{ 5, 4 },{ 6, 3 },{ 6, 5 },{ 7, 4 },{ 8, 5 },{8, 9},{9, 2},{ 9, 6 } }, 
@@ -771,7 +902,7 @@ void Special::generateMountaintop(int id, const std::vector<std::pair<int, int>>
 	{ {1, 2},{2, 1}, { 2, 5 },{ 4, 3 },{ 4, 5 },{ 6, 3 },{ 6, 5 },{6, 9}, { 7, 4 },{7, 8}, { 8, 3 },{ 8, 5 },{ 9, 2 },{ 9, 4 },{ 9, 6 },{ 10, 3 },{ 10, 5 },{ 10, 7 } },
 	{ {0, 7}, { 1, 4 },{2, 1}, { 2, 3 },{ 2, 5 },{ 3, 4 },{3, 6}, { 4, 3 },{ 5, 2 },{ 6, 1 },{ 6, 3 },{ 7, 0 },{ 7, 2 },{ 7, 4 },{ 8, 1 },{ 8, 3 },{ 8, 5 },{ 9, 4 },{ 9, 6 },{ 10, 3 },{ 10, 5 },{ 10, 7 } },
 	};
-	if (generator->get_symbol_type(symbolVec[0].first) == Decoration::Triangle) { //Hard mode
+	if (symbolVec[0].first.symbol == Deco::Symbol::Triangle) { //Hard mode
 		perspectiveU = { { { 1, 2 },{ 1, 4 },{ 3, 0 },{ 3, 2 },{ 3, 4 },{ 3, 6 },{ 5, 8 },{ 6, 7 },{ 7, 0 },{ 7, 2 },{ 7, 4 },{ 8, 1 },{ 8, 3 },{ 8, 5 },{ 8, 9 },{ 9, 2 },{ 9, 4 },{ 9, 6 },{ 10, 3 },{ 10, 5 },{ 10, 7 } } };
 	}
 	std::vector<std::vector<Point>> perspectiveL = {
@@ -789,21 +920,28 @@ void Special::generateMountaintop(int id, const std::vector<std::pair<int, int>>
 
 	std::vector<std::shared_ptr<Generate>> gens;
 	for (int i = 0; i < 3; i++) gens.push_back(std::make_shared<Generate>());
-	for (std::shared_ptr<Generate> g : gens) {
-		g->setGridSize(5, 5);
-		g->setSymbol(Decoration::Gap, 5, 0);
-		g->setSymbol(Decoration::Gap, 5, 10);
-		g->setFlag(Generate::Config::PreserveStructure);
-		g->setFlag(Generate::ShortPath);
-		g->setFlag(Generate::DecorationsOnly);
+	for (auto&& gen : gens) {
+		gen->setGridSize(5, 5);
+		gen->setSymbol(Deco::Gap(), 5, 0);
+		gen->setSymbol(Deco::Gap(), 5, 10);
+		gen->setFlag(Generate::Config::PreserveStructure);
+		gen->setFlag(Generate::ShortPath);
+		gen->setFlag(Generate::DecorationsOnly);
 	}
-	gens[0]->_starts = { { 2, 0 } }; gens[1]->_starts = { { 2, 10 } }; gens[2]->_starts = { { 10, 4 },{ 10, 6 } };
-	gens[0]->_exits = { { 8, 10 } }; gens[1]->_exits = { { 8, 0 } }; gens[2]->_exits = { { 0, 4 },{ 0, 6 } };
-	gens[0]->setObstructions(perspectiveU); gens[1]->setObstructions(perspectiveL); gens[2]->setObstructions(perspectiveC);
-	generator->generateMulti(id, gens, symbolVec);
+	gens[0]->_starts = { { 2, 0 } };
+	gens[1]->_starts = { { 2, 10 } };
+	gens[2]->_starts = { { 10, 4 },{ 10, 6 } };
+	gens[0]->_exits = { { 8, 10 } };
+	gens[1]->_exits = { { 8, 0 } };
+	gens[2]->_exits = { { 0, 4 },{ 0, 6 } };
+	gens[0]->setObstructions(perspectiveU);
+	gens[1]->setObstructions(perspectiveL);
+	gens[2]->setObstructions(perspectiveC);
+	bool splitStones = true; // Keep the stones widely separated.
+	generator->generateMulti(id, gens, symbolVec, splitStones);
 }
 
-void Special::generateMultiPuzzle(std::vector<int> ids, const std::vector<std::vector<std::pair<int, int>>>& symbolVec, bool flip) {
+void Special::generateMultiPuzzle(std::vector<int> ids, const std::vector<std::vector<DecoPair>>& symbolVec, bool flip) {
 	Memory* memory = Memory::get();
 
 	generator->resetConfig();
@@ -816,7 +954,7 @@ void Special::generateMultiPuzzle(std::vector<int> ids, const std::vector<std::v
 	for (int i = 0; i < ids.size(); i++) {
 		gens[i].setFlag(Generate::Config::DisableWrite);
 		gens[i].setFlag(Generate::WriteColors);
-		if (symbols[i].getNum(Decoration::Poly)  - symbols[i].getNum(Decoration::Eraser) > 1) gens[i].setFlag(Generate::RequireCombineShapes);
+		if (symbols[i].getNum(Deco::Symbol::Poly)  - symbols[i].getNum(Deco::Symbol::Eraser) > 1) gens[i].setFlag(Generate::RequireCombineShapes);
 	}
 	while (!generateMultiPuzzle(ids, gens, symbols, generator->_path)) {
 		generator->generate(ids[0]);
@@ -824,7 +962,8 @@ void Special::generateMultiPuzzle(std::vector<int> ids, const std::vector<std::v
 	for (int i = 0; i < ids.size(); i++) {
 		gens[i].write(ids[i]);
 		generator->incrementProgress();
-		if (symbolVec[0][0].first == (Decoration::Triangle | Decoration::Color::Orange)) { //Hard mode
+		if (symbolVec[0][0].first.symbol == Deco::Symbol::Triangle || 
+			symbolVec[0][0].first.color == Deco::Color::Orange) { //Hard mode
 			int numIntersections = memory->ReadPanelData<int>(ids[i], NUM_DOTS);
 			std::vector<float> intersections = memory->ReadArray<float>(ids[i], DOT_POSITIONS, numIntersections * 2);
 			for (int j = 0; j < intersections.size(); j += 2) {
@@ -842,7 +981,12 @@ void Special::generateMultiPuzzle(std::vector<int> ids, const std::vector<std::v
 	generator->resetVars();
 }
 
-bool Special::generateMultiPuzzle(std::vector<int> ids, std::vector<Generate>& gens, const std::vector<PuzzleSymbols>& symbols, const std::set<Point>& path) {
+bool Special::generateMultiPuzzle(
+	std::vector<int> ids,
+	std::vector<Generate>& gens,
+	const std::vector<PuzzleSymbols>& symbols,
+	const std::set<Point>& path)
+	{
 	for (int i = 0; i < ids.size(); i++) {
 		gens[i]._custom_grid.clear();
 		gens[i].setPath(path);
@@ -870,12 +1014,12 @@ void Special::generate2Bridge(int id1, int id2)
 {
 	std::vector<std::shared_ptr<Generate>> gens;
 	for (int i = 0; i < 3; i++) gens.push_back(std::make_shared<Generate>());
-	for (std::shared_ptr<Generate> g : gens) {
-		g->setFlag(Generate::Config::DisableWrite);
-		g->setFlag(Generate::Config::DisableReset);
-		g->setFlag(Generate::Config::DecorationsOnly);
-		g->setFlag(Generate::Config::ShortPath);
-		g->setFlag(Generate::Config::WriteColors);
+	for (auto&& gen : gens) {
+		gen->setFlag(Generate::Config::DisableWrite);
+		gen->setFlag(Generate::Config::DisableReset);
+		gen->setFlag(Generate::Config::DecorationsOnly);
+		gen->setFlag(Generate::Config::ShortPath);
+		gen->setFlag(Generate::Config::WriteColors);
 	}
 	while (!generate2Bridge(id1, id2, gens));
 	gens[1]->write(id1);
@@ -888,13 +1032,14 @@ bool Special::generate2Bridge(int id1, int id2, std::vector<std::shared_ptr<Gene
 	for (int i = 0; i < gens.size(); i++) {
 		gens[i]->_custom_grid.clear();
 		gens[i]->setPath(std::set<Point>());
-		std::vector<Point> walls = { { 12, 1 },{ 12, 3 },{ 3, 8 },{ 9, 8 } };
-		for (Point p : walls) gens[i]->setSymbol(Decoration::Gap, p.first, p.second);
-		if (i % 2 == 0) {
-			gens[i]->setObstructions({ { 5, 8 },{ 6, 7 },{ 7, 8 } });
+		std::vector<Point> walls = {{12, 1}, {12, 3}, {3, 8}, {9, 8}};
+		for (Point p : walls) {
+			gens[i]->setSymbol(Deco::Gap(), p);
 		}
-		else {
-			gens[i]->setObstructions({ { 5, 0 },{ 6, 1 },{ 7, 0 } });
+		if (i % 2 == 0) { // Flip the gaps based on the direction you are facing.
+			gens[i]->setObstructions({{5, 8}, {6, 7}, {7, 8}});
+		} else {
+			gens[i]->setObstructions({{5, 0}, {6, 1}, {7, 0}});
 		}
 	}
 
@@ -903,7 +1048,9 @@ bool Special::generate2Bridge(int id1, int id2, std::vector<std::shared_ptr<Gene
 	gens[0]->_exits = { { 12, 8 } };
 	gens[1]->_exits = { { 0, 0 } };
 
-	PuzzleSymbols symbols({ {Decoration::Poly | Decoration::Can_Rotate | Decoration::Color::Yellow, 1}, {Decoration::Star | Decoration::Color::Yellow, 1} });
+	PuzzleSymbols symbols(
+		{DecoPair{Deco::SpinPoly(Deco::Color::Yellow), 1},
+		 DecoPair{Deco::Star(Deco::Color::Yellow), 1}});
 	int fails = 0;
 	while (!gens[0]->generate(id1, symbols)) {
 		if (fails++ > 20)
@@ -912,8 +1059,10 @@ bool Special::generate2Bridge(int id1, int id2, std::vector<std::shared_ptr<Gene
 
 	gens[1]->setPath(gens[0]->_path);
 	gens[1]->customPath.clear();
-	gens[1]->_custom_grid = gens[0]->_panel->_grid;
-	symbols = PuzzleSymbols({ { Decoration::Poly | Decoration::Can_Rotate | Decoration::Color::Yellow, 1 },{ Decoration::Star | Decoration::Color::Yellow, 3 } });
+	gens[1]->_custom_grid = gens[0]->_panel->grid;
+	symbols = PuzzleSymbols(
+		{DecoPair{Deco::SpinPoly(Deco::Color::Yellow), 1},
+		 DecoPair{Deco::Star(Deco::Color::Yellow), 3 }});
 	fails = 0;
 	while (!gens[1]->generate(id2, symbols)) {
 		if (fails++ > 20) {
@@ -921,8 +1070,9 @@ bool Special::generate2Bridge(int id1, int id2, std::vector<std::shared_ptr<Gene
 		}
 	}
 
-	if (gens[0]->get(11, 1) != 0 || gens[1]->get(11, 1) != 0 || gens[1]->get(11, 3) != 0 || gens[1]->get(11, 3) != 0)
+	if (gens[0]->get(11, 1) != 0 || gens[1]->get(11, 1) != 0 || gens[1]->get(11, 3) != 0 || gens[1]->get(11, 3) != 0) {
 		return false;
+	}
 	
 	//Make sure both shapes weren't blocked off by the same path
 	int shapeCount = 0;
@@ -952,13 +1102,15 @@ void Special::generate2BridgeH(int id1, int id2)
 	Memory* memory = Memory::get();
 
 	std::vector<std::shared_ptr<Generate>> gens;
-	for (int i = 0; i < 3; i++) gens.push_back(std::make_shared<Generate>());
-	for (std::shared_ptr<Generate> g : gens) {
-		g->setFlag(Generate::Config::DisableWrite);
-		g->setFlag(Generate::Config::DisableReset);
-		g->setFlag(Generate::Config::DecorationsOnly);
-		g->setFlag(Generate::Config::ShortPath);
-		g->setFlag(Generate::Config::WriteColors);
+	for (int i = 0; i < 3; i++) {
+		gens.push_back(std::make_shared<Generate>());
+	}
+	for (auto&& gen : gens) {
+		gen->setFlag(Generate::Config::DisableWrite);
+		gen->setFlag(Generate::Config::DisableReset);
+		gen->setFlag(Generate::Config::DecorationsOnly);
+		gen->setFlag(Generate::Config::ShortPath);
+		gen->setFlag(Generate::Config::WriteColors);
 	}
 	while (!generate2BridgeH(id1, id2, gens));
 	
@@ -970,9 +1122,9 @@ void Special::generate2BridgeH(int id1, int id2)
 	int numIntersections = memory->ReadPanelData<int>(id1, NUM_DOTS);
 	std::vector<int> intersectionFlags = memory->ReadArray<int>(id1, DOT_FLAGS, numIntersections);
 	std::vector<int> intersectionFlags2 = memory->ReadArray<int>(id2, DOT_FLAGS, numIntersections);
-	for (int x = 0; x < gens[0]->_panel->_width; x += 2) {
-		for (int y = 0; y < gens[0]->_panel->_height; y += 2) {
-			if (gens[0]->get(x, y) == Decoration::Dot_Intersection) {
+	for (int x = 0; x < gens[0]->_panel->width; x += 2) {
+		for (int y = 0; y < gens[0]->_panel->height; y += 2) {
+			if (gens[0]->get(x, y) == Deco::Dot(Deco::Location::Intersection)) { // FIX THIS COMPARISON
 				intersectionFlags[gens[0]->_panel->xy_to_loc(x, y)] = Decoration::Dot_Intersection;
 				intersectionFlags2[gens[0]->_panel->xy_to_loc(x, y)] = Decoration::Dot_Intersection;
 			}
@@ -994,7 +1146,7 @@ bool Special::generate2BridgeH(int id1, int id2, std::vector<std::shared_ptr<Gen
 		gens[i]->_custom_grid.clear();
 		gens[i]->setPath(std::set<Point>());
 		std::vector<Point> walls = { { 12, 1 },{ 12, 3 },{ 3, 8 },{ 9, 8 } };
-		for (Point p : walls) gens[i]->setSymbol(Decoration::Gap, p.first, p.second);
+		for (Point p : walls) gens[i]->setSymbol(Deco::Gap(), p);
 		if (i == 0) {
 			gens[i]->setObstructions({ { 3, 0 },{ 3, 2 },{ 3, 4 },{4, 5}, {5, 6}, {6, 7}, {8, 7}, {9, 0}, {9, 2}, {9, 4}, {10, 5}, {12, 5} });
 		}
@@ -1009,46 +1161,46 @@ bool Special::generate2BridgeH(int id1, int id2, std::vector<std::shared_ptr<Gen
 	gens[0]->generate(id1);
 	gens[1]->setPath(gens[0]->_path);
 	gens[1]->customPath.clear();
-	gens[1]->_custom_grid = gens[0]->_panel->_grid;
+	gens[1]->_custom_grid = gens[0]->_panel->grid;
 	gens[1]->generate(id2);
 	std::vector<Point> points = { {12, 2}, { 11, 2 }, { 10, 2 }, { 10, 3 }, { 10, 4 }, { 9, 4 }, { 8, 4 }, { 7, 4 }, { 6, 4 } };
 	for (int i = 0; i < points.size(); i++) {
-		if (gens[1]->get(points[i]) == PATH) break;
+		if (gens[1]->get(points[i]) == Deco::kPath) break;
 		gens[1]->set_path(points[i]);
 		if (i == points.size() - 1) return false;
 	}
 	int state = 0;
 	for (int i = 8; i >= 0; i--) {
 		if (state == 0) {
-			if (gens[1]->get(i, 2) == PATH) state++;
+			if (gens[1]->get(i, 2) == Deco::kPath) state++;
 		}
 		else if (state == 1) {
-			if (gens[1]->get(i, 2) != PATH) {
+			if (gens[1]->get(i, 2) != Deco::kPath) {
 				state++;
 				gens[1]->set_path({ i, 2 });
 			}
 		}
 		else if (state == 2) {
-			if (gens[1]->get(i, 2) == PATH && gens[0]->get(i, 2) != PATH) break;
-			if (gens[1]->get(i, 2) == PATH && gens[0]->get(i, 2) == PATH) return false;
+			if (gens[1]->get(i, 2) == Deco::kPath && gens[0]->get(i, 2) != Deco::kPath) break;
+			if (gens[1]->get(i, 2) == Deco::kPath && gens[0]->get(i, 2) == Deco::kPath) return false;
 			gens[1]->set_path({ i, 2 });
 		}
 	}
 	state = 0;
 	for (int i = 12; i >= 0; i--) {
 		if (state == 0) {
-			if (gens[1]->get(i, 6) == PATH) state++;
+			if (gens[1]->get(i, 6) == Deco::kPath) state++;
 		}
 		else if (state == 1) {
-			if (gens[1]->get(i, 6) != PATH) {
+			if (gens[1]->get(i, 6) != Deco::kPath) {
 				state++;
 				gens[1]->set_path({ i, 6 });
-				gens[0]->set(i + 1, 6, Decoration::Dot_Intersection);
+				gens[0]->set(i + 1, 6, Deco::Dot(Deco::Location::Intersection));
 			}
 		}
 		else if (state == 2) {
-			if (gens[1]->get(i, 6) == PATH && gens[0]->get(i, 6) != PATH) break;
-			if (gens[1]->get(i, 6) == PATH && gens[0]->get(i, 6) == PATH) return false;
+			if (gens[1]->get(i, 6) == Deco::kPath && gens[0]->get(i, 6) != Deco::kPath) break;
+			if (gens[1]->get(i, 6) == Deco::kPath && gens[0]->get(i, 6) == Deco::kPath) return false;
 			gens[1]->set_path({ i, 6 });
 		}
 	}
@@ -1061,7 +1213,7 @@ bool Special::generate2BridgeH(int id1, int id2, std::vector<std::shared_ptr<Gen
 		if (region.size() == 1 || region.size() > 6) return false;
 		int symbol = gens[0]->make_shape_symbol(region, false, false);
 		if (!symbol) return false;
-		gens[0]->set(pick_random(region), symbol | Decoration::Color::Yellow);
+		gens[0]->set(Utilities::pick_random(region), symbol | Decoration::Color::Yellow);
 		for (Point p : region) open.erase(p);
 		count++;
 	}
@@ -1111,8 +1263,8 @@ bool checkShape(const std::set<Point>& shape, int direction) {
 	return false;
 }
 
-void Special::generateMountainFloor()
-{
+void Special::generateMountainFloor() {
+	using enum Deco::Color;
 	std::vector<int> ids = { 0x09EFF, 0x09F01, 0x09FC1, 0x09F8E };
 	int idfloor = 0x09FDA;
 	//{ 0x09EFF, 0x09F01, 0x09FC1, 0x09F8E }, 0x09FDA
@@ -1123,7 +1275,7 @@ void Special::generateMountainFloor()
 	//Make sure no duplicated symbols
 	std::set<int> sym;
 	do {
-		generator->generate(idfloor, { {Decoration::Poly, 4} });
+		generator->generate(idfloor, {DecoPair{Deco::Poly(), 4}});
 		sym.clear();
 		for (Point p : floorPos) sym.insert(generator->get(p));
 	} while (sym.size() < 4);
@@ -1160,7 +1312,7 @@ void Special::generateMountainFloor()
 		for (Point p : newShape) {
 			for (Point dir : Generate::_DIRECTIONS2) {
 				if (!newShape.count(p + dir)) {
-					gen.setSymbol(PATH, p.first + dir.first / 2, p.second + dir.second / 2);
+					gen.setSymbol(Deco::Deco(Deco::Symbol::Path), p.first + dir.first / 2, p.second + dir.second / 2);
 				}
 			}
 		}
@@ -1170,7 +1322,8 @@ void Special::generateMountainFloor()
 		if (i == rotateIndex) gen.generate(ids[i], { });
 		else
 		{
-			gen.generate(ids[i], { {Decoration::Poly, 1}, {Decoration::Eraser | Decoration::Color::Green, 1} });
+			gen.generate(ids[i], {DecoPair{Deco::Poly(), 1},
+								  DecoPair{Deco::Eraser(Green), 1}});
 			std::set<Point> covered;
 			int decoyShape;
 			for (int x = 1; x <= 7; x += 2)
@@ -1185,8 +1338,8 @@ void Special::generateMountainFloor()
 				continue;
 			}
 		}
-		Point pos = pick_random(newShape);
-		gen.setVal(symbol, pos.first, pos.second);
+		Point pos = Utilities::pick_random(newShape);
+		gen._panel->SetGridSymbol(pos, Deco::to_deco(symbol));
 		gen.write(ids[i]);
 	}
 	generator->incrementProgress();
@@ -1194,8 +1347,8 @@ void Special::generateMountainFloor()
 	generator->resetConfig();
 }
 
-void Special::generateMountainFloorH()
-{
+void Special::generateMountainFloorH() {
+	using enum Deco::Color;
 	const std::vector<int> ids = { 0x09EFF, 0x09F01, 0x09FC1, 0x09F8E };
 	const int idfloor = 0x09FDA;
 	generator->resetConfig();
@@ -1204,12 +1357,14 @@ void Special::generateMountainFloorH()
 	generator->setFlag(Generate::Config::DisableWrite);
 	generator->setFlag(Generate::Config::MountainFloorH);
 	generator->setSymmetry(Panel::Symmetry::Rotational);
-	generator->setSymbol(Decoration::Start, 0, 10); generator->setSymbol(Decoration::Start, 10, 0);
-	generator->setSymbol(Decoration::Exit, 0, 0); generator->setSymbol(Decoration::Exit, 10, 10);
+	generator->setSymbol(Deco::kStart, 0, 10);
+	generator->setSymbol(Deco::kStart, 10, 0);
+	generator->setSymbol(Deco::kExit, 0, 0);
+	generator->setSymbol(Deco::kExit, 10, 10);
 	//Make sure no duplicated symbols
 	std::set<int> sym;
 	do {
-		generator->generate(idfloor, { {Decoration::Poly, 6} });
+		generator->generate(idfloor, { DecoPair{Deco::Poly(), 6} });
 		sym.clear();
 		for (Point p : floorPos) sym.insert(generator->get(p));
 	} while (sym.size() < 4);
@@ -1223,7 +1378,7 @@ void Special::generateMountainFloorH()
 		Shape shape;
 		for (int j = 0; j < 16; j++) {
 			if (symbol & (1 << (j + 16))) {
-				shape.emplace(Point((j % 4) * 2 + 1, 8 - ((j / 4) * 2 + 1)));
+				shape.emplace((j % 4) * 2 + 1, 8 - ((j / 4) * 2 + 1));
 			}
 		}
 		//Translate randomly
@@ -1243,7 +1398,7 @@ void Special::generateMountainFloorH()
 		for (Point p : newShape) {
 			for (Point dir : Generate::_DIRECTIONS2) {
 				if (!newShape.count(p + dir)) {
-					gen.setSymbol(PATH, p.first + dir.first / 2, p.second + dir.second / 2);
+					gen.setSymbol(Deco::Deco(Deco::Symbol::Path), p.first + dir.first / 2, p.second + dir.second / 2);
 				}
 			}
 		}
@@ -1252,10 +1407,16 @@ void Special::generateMountainFloorH()
 		gen.setFlag(Generate::Config::DisableWrite);
 		gen.setFlag(Generate::Config::MountainFloorH);
 		gen.setFlag(Generate::Config::DisableCancelShapes);
-		PuzzleSymbols symbols({ { Decoration::Poly, 2 },{ Decoration::Eraser | Decoration::Color::Green, 1 } });
+		PuzzleSymbols symbols(
+			{DecoPair{Deco::Poly(), 2 },
+			 DecoPair{Deco::Eraser(Green), 1}});
 		if (newShape.size() > 5) {
-			if (combine == 0) symbols = PuzzleSymbols({ { Decoration::Poly, 3 },{ Decoration::Eraser | Decoration::Color::Green, 1 } });
-			if (combine == 1) symbols = PuzzleSymbols({ { Decoration::Poly, 3 },{ Decoration::Poly | Decoration::Negative | Decoration::Color::Cyan, 1 } });
+			if (combine == 0) symbols = PuzzleSymbols(
+				{DecoPair{Deco::Poly(), 3},
+				 DecoPair{Deco::Eraser(Green), 1}});
+			if (combine == 1) symbols = PuzzleSymbols(
+				{DecoPair{Deco::Poly(), 3},
+				 DecoPair{Deco::NegaPoly(Cyan), 1}});
 			combine++;
 		}
 		fails = 0;
@@ -1279,7 +1440,9 @@ void Special::generateMountainFloorH()
 		//Check that the symbols aren't the same
 		std::set<int> symbolSet;
 		for (Point p : gen._gridpos) {
-			if (gen.get_symbol_type(gen.get(p)) == Decoration::Poly) symbolSet.insert(gen.get(p));
+			if (gen.get_symbol_type(gen.get(p)) == Decoration::Poly) {
+				symbolSet.insert(gen.get(p));
+			}
 		}
 		if (symbolSet.size() <= 1) {
 			i--;
@@ -1297,26 +1460,29 @@ void Special::generateMountainFloorH()
 	generator->resetConfig();
 }
 
-void Special::generatePivotPanel(int id, Point gridSize, const std::vector<std::pair<int, int>>& symbolVec, bool colorblind) {
-	int width = gridSize.first * 2 + 1, height = gridSize.second * 2 + 1;
+void Special::generatePivotPanel(int id, Point gridSize, const std::vector<DecoPair>& symbolVec, bool colorblind) {
+	int width = gridSize.first * 2 + 1;
+	int height = gridSize.second * 2 + 1;
 	std::vector<std::shared_ptr<Generate>> gens;
-	for (int i = 0; i < 3; i++) gens.push_back(std::make_shared<Generate>());
+	for (int i = 0; i < 3; i++) {
+		gens.push_back(std::make_shared<Generate>());
+	}
 	for (std::shared_ptr<Generate> gen : gens) {
 		gen->seed(Random::rand());
 		gen->colorblind = colorblind;
-		gen->setSymbol(Decoration::Start, width / 2, height - 1);
-		gen->setGridSize(gridSize.first, gridSize.second);
+		gen->setSymbol(Deco::kStart, width / 2, height - 1);
+		gen->setGridSize(gridSize);
 		gen->setFlag(Generate::Config::FixBackground);
 		gen->setFlag(Generate::Config::DisableWrite);
 	}
-	gens[0]->setSymbol(Decoration::Exit, 0, height / 2);
-	gens[1]->setSymbol(Decoration::Exit, width - 1, height / 2);
-	gens[2]->setSymbol(Decoration::Exit, width / 2, 0);
+	gens[0]->setSymbol(Deco::kExit, 0, height / 2);
+	gens[1]->setSymbol(Deco::kExit, width - 1, height / 2);
+	gens[2]->setSymbol(Deco::kExit, width / 2, 0);
 	generator->generateMulti(id, gens, symbolVec);
 	gens[0]->_panel->_endpoints.clear();
-	gens[0]->_panel->SetGridSymbol(0, height / 2, Decoration::Exit, Decoration::Color::None);
-	gens[0]->_panel->SetGridSymbol(width - 1, height / 2, Decoration::Exit, Decoration::Color::None);
-	gens[0]->_panel->SetGridSymbol(width / 2, 0, Decoration::Exit, Decoration::Color::None);
+	gens[0]->_panel->PlaceExit({0, height / 2});
+	gens[0]->_panel->PlaceExit({width - 1, height / 2});
+	gens[0]->_panel->PlaceExit({width / 2, 0});
 	gens[0]->setFlag(Generate::Config::TreehouseColors);
 	gens[0]->write(id);
 	Memory* memory = Memory::get();
@@ -1336,9 +1502,9 @@ void Special::modifyGate(int id)
 	std::vector<int> connections_a = memory->ReadArray<int>(id, DOT_CONNECTION_A, numConnections);
 	std::vector<int> connections_b = memory->ReadArray<int>(id, DOT_CONNECTION_B, numConnections);
 	int style = memory->ReadPanelData<int>(id, STYLE_FLAGS);
-	intersectionFlags[6] |= Decoration::Start;
-	intersectionFlags[18] |= Decoration::Start;
-	intersectionFlags[11] = Decoration::Dot_Intersection;
+	intersectionFlags[6] |= Deco::kStart;
+	intersectionFlags[18] |= Deco::kStart;
+	intersectionFlags[11] = Deco::Dot(Deco::Location::Intersection);
 	intersectionFlags[24] = 0;
 	intersectionFlags.push_back(0x400001);
 	intersections.push_back(0.5f);
@@ -1385,27 +1551,28 @@ void Special::addDecoyExits(std::shared_ptr<Generate> gen, int amount) {
 		if (pos.second % 2) pos.second--;
 		if (gen->_exits.count(pos) || gen->_exits.count(gen->get_sym_point(pos)))
 			continue;
-		gen->_panel->SetGridSymbol(pos.first, pos.second, Decoration::Exit, Decoration::Color::None);
+		gen->_panel->PlaceExit(pos);
 		gen->_exits.insert(pos);
 		amount--;
 	}
 }
 
+// Secret Symmetry, for Hard mode
 void Special::initSSGrid(std::shared_ptr<Generate> gen) {
-	gen->setSymbol(Decoration::Start, 0, 0);  gen->setSymbol(Decoration::Start, 6, 0), gen->setSymbol(Decoration::Start, 8, 0), gen->setSymbol(Decoration::Start, 14, 0);
-	gen->setSymbol(Decoration::Start, 0, 6);  gen->setSymbol(Decoration::Start, 6, 6), gen->setSymbol(Decoration::Start, 8, 6), gen->setSymbol(Decoration::Start, 14, 6);
-	gen->setSymbol(Decoration::Start, 0, 8);  gen->setSymbol(Decoration::Start, 6, 8), gen->setSymbol(Decoration::Start, 8, 8), gen->setSymbol(Decoration::Start, 14, 8);
-	gen->setSymbol(Decoration::Start, 0, 14);  gen->setSymbol(Decoration::Start, 6, 14), gen->setSymbol(Decoration::Start, 8, 14), gen->setSymbol(Decoration::Start, 14, 14);
-	gen->setSymbol(Decoration::Exit, 2, 0);  gen->setSymbol(Decoration::Exit, 4, 0), gen->setSymbol(Decoration::Exit, 10, 0), gen->setSymbol(Decoration::Exit, 12, 0);
-	gen->setSymbol(Decoration::Exit, 2, 14);  gen->setSymbol(Decoration::Exit, 4, 14), gen->setSymbol(Decoration::Exit, 10, 14), gen->setSymbol(Decoration::Exit, 12, 14);
-	gen->setSymbol(Decoration::Exit, 0, 2);  gen->setSymbol(Decoration::Exit, 0, 4), gen->setSymbol(Decoration::Exit, 0, 10), gen->setSymbol(Decoration::Exit, 0, 12);
-	gen->setSymbol(Decoration::Exit, 14, 2);  gen->setSymbol(Decoration::Exit, 14, 4), gen->setSymbol(Decoration::Exit, 14, 10), gen->setSymbol(Decoration::Exit, 14, 12);
+	gen->setSymbol(Deco::kStart, 0, 0);  gen->setSymbol(Deco::kStart, 6, 0), gen->setSymbol(Deco::kStart, 8, 0), gen->setSymbol(Deco::kStart, 14, 0);
+	gen->setSymbol(Deco::kStart, 0, 6);  gen->setSymbol(Deco::kStart, 6, 6), gen->setSymbol(Deco::kStart, 8, 6), gen->setSymbol(Deco::kStart, 14, 6);
+	gen->setSymbol(Deco::kStart, 0, 8);  gen->setSymbol(Deco::kStart, 6, 8), gen->setSymbol(Deco::kStart, 8, 8), gen->setSymbol(Deco::kStart, 14, 8);
+	gen->setSymbol(Deco::kStart, 0, 14);  gen->setSymbol(Deco::kStart, 6, 14), gen->setSymbol(Deco::kStart, 8, 14), gen->setSymbol(Deco::kStart, 14, 14);
+	gen->setSymbol(Deco::kExit, 2, 0);  gen->setSymbol(Deco::kExit, 4, 0), gen->setSymbol(Deco::kExit, 10, 0), gen->setSymbol(Deco::kExit, 12, 0);
+	gen->setSymbol(Deco::kExit, 2, 14);  gen->setSymbol(Deco::kExit, 4, 14), gen->setSymbol(Deco::kExit, 10, 14), gen->setSymbol(Deco::kExit, 12, 14);
+	gen->setSymbol(Deco::kExit, 0, 2);  gen->setSymbol(Deco::kExit, 0, 4), gen->setSymbol(Deco::kExit, 0, 10), gen->setSymbol(Deco::kExit, 0, 12);
+	gen->setSymbol(Deco::kExit, 14, 2);  gen->setSymbol(Deco::kExit, 14, 4), gen->setSymbol(Deco::kExit, 14, 10), gen->setSymbol(Deco::kExit, 14, 12);
 }
 
 void Special::initRotateGrid(std::shared_ptr<Generate> gen)
 {
-	gen->setSymbol(Decoration::Start, 4, 0);  gen->setSymbol(Decoration::Start, 10, 4), gen->setSymbol(Decoration::Start, 6, 10), gen->setSymbol(Decoration::Start, 0, 6);
-	gen->setSymbol(Decoration::Exit, 6, 0);  gen->setSymbol(Decoration::Exit, 10, 6), gen->setSymbol(Decoration::Exit, 4, 10), gen->setSymbol(Decoration::Exit, 0, 4);
+	gen->setSymbol(Deco::kStart, 4, 0);  gen->setSymbol(Deco::kStart, 10, 4), gen->setSymbol(Deco::kStart, 6, 10), gen->setSymbol(Deco::kStart, 0, 6);
+	gen->setSymbol(Deco::kExit, 6, 0);  gen->setSymbol(Deco::kExit, 10, 6), gen->setSymbol(Deco::kExit, 4, 10), gen->setSymbol(Deco::kExit, 0, 4);
 }
 
 void Special::initPillarSymmetry(std::shared_ptr<Generate> gen, int id, Panel::Symmetry symmetry)
@@ -1413,13 +1580,13 @@ void Special::initPillarSymmetry(std::shared_ptr<Generate> gen, int id, Panel::S
 	gen->setSymmetry(symmetry);
 	switch (symmetry) {
 	case Panel::Symmetry::PillarParallel:
-		gen->setSymbol(Decoration::Start, 0, gen->_height - 1);  gen->setSymbol(Decoration::Start, 6, gen->_height - 1), gen->setSymbol(Decoration::Exit, 0, 0);  gen->setSymbol(Decoration::Exit, 6, 0); break;
+		gen->setSymbol(Deco::kStart, 0, gen->_height - 1);  gen->setSymbol(Deco::kStart, 6, gen->_height - 1), gen->setSymbol(Deco::kExit, 0, 0);  gen->setSymbol(Deco::kExit, 6, 0); break;
 	case Panel::Symmetry::PillarVertical:
-		gen->setSymbol(Decoration::Start, 2, gen->_height - 1);  gen->setSymbol(Decoration::Start, 4, gen->_height - 1), gen->setSymbol(Decoration::Exit, 2, 0);  gen->setSymbol(Decoration::Exit, 4, 0); break;
+		gen->setSymbol(Deco::kStart, 2, gen->_height - 1);  gen->setSymbol(Deco::kStart, 4, gen->_height - 1), gen->setSymbol(Deco::kExit, 2, 0);  gen->setSymbol(Deco::kExit, 4, 0); break;
 	case Panel::Symmetry::PillarHorizontal:
-		gen->setSymbol(Decoration::Start, 0, gen->_height - 1);  gen->setSymbol(Decoration::Exit, 6, gen->_height - 1), gen->setSymbol(Decoration::Exit, 0, 0);  gen->setSymbol(Decoration::Start, 6, 0); break;
+		gen->setSymbol(Deco::kStart, 0, gen->_height - 1);  gen->setSymbol(Deco::kExit, 6, gen->_height - 1), gen->setSymbol(Deco::kExit, 0, 0);  gen->setSymbol(Deco::kStart, 6, 0); break;
 	case Panel::Symmetry::PillarRotational:
-		gen->setSymbol(Decoration::Start, 0, gen->_height - 1);  gen->setSymbol(Decoration::Exit, 6, gen->_height - 1), gen->setSymbol(Decoration::Exit, 0, 0);  gen->setSymbol(Decoration::Start, 6, 0); break;
+		gen->setSymbol(Deco::kStart, 0, gen->_height - 1);  gen->setSymbol(Deco::kExit, 6, gen->_height - 1), gen->setSymbol(Deco::kExit, 0, 0);  gen->setSymbol(Deco::kStart, 6, 0); break;
 	}
 
 	Memory* memory = Memory::get();
@@ -1434,15 +1601,15 @@ void Special::generateSymmetryGate(int id)
 	generator->setFlag(Generate::Config::DisableWrite);
 	generator->setFlag(Generate::Config::WriteInvisible);
 	generator->setSymmetry(Panel::Symmetry::RotateRight);
-	generator->setSymbol(Decoration::Start, 0, 0);
-	generator->setSymbol(Decoration::Start, 0, 8);
-	generator->setSymbol(Decoration::Start, 8, 0);
-	generator->setSymbol(Decoration::Start, 8, 8);
-	generator->setSymbol(Decoration::Exit, 4, 0);
-	generator->setSymbol(Decoration::Exit, 4, 8);
-	generator->setSymbol(Decoration::Exit, 0, 4);
-	generator->setSymbol(Decoration::Exit, 8, 4);
-	generator->generate(id, { {Decoration::Triangle | Decoration::Color::Yellow, 4} });
+	generator->setSymbol(Deco::kStart, 0, 0);
+	generator->setSymbol(Deco::kStart, 0, 8);
+	generator->setSymbol(Deco::kStart, 8, 0);
+	generator->setSymbol(Deco::kStart, 8, 8);
+	generator->setSymbol(Deco::kExit, 4, 0);
+	generator->setSymbol(Deco::kExit, 4, 8);
+	generator->setSymbol(Deco::kExit, 0, 4);
+	generator->setSymbol(Deco::kExit, 8, 4);
+	generator->generate(id, { DecoPair{Deco::Triangle(Deco::Color::Yellow), 4} });
 	std::vector<Point> breakPos = { {0, 3}, {2, 3}, {4, 3}, {6, 3}, {8, 3}, {0, 5}, {2, 5}, {4, 5}, {6, 5}, {8, 5} };
 	for (Point p : breakPos) generator->set(p, IntersectionFlags::COLUMN | 0x40000);
 	breakPos = { { 3, 0 },{ 3, 2 },{ 3, 4 },{ 3, 6 },{ 3, 8 },{ 5, 0 },{ 5, 2 },{ 5, 4 },{ 5, 6 },{ 5, 8 } };
@@ -1522,8 +1689,8 @@ bool Special::checkDotSolvability(std::shared_ptr<Panel> panel1, std::shared_ptr
 	return false;
 }
 
-void Special::createArrowPuzzle(int id, int x, int y, int dir, int ticks, const std::vector<Point>& gaps)
-{
+// Hand-craft an Arrow puzzle, for the training Discards.
+void Special::createArrowPuzzle(int id, int x, int y, int dir, int ticks, const std::vector<Point>& gaps) {
 	generator->initPanel(id);
 	generator->clear();
 	generator->set(x, y, Decoration::Arrow | (ticks << 12) | (dir << 16));
@@ -1535,28 +1702,38 @@ void Special::createArrowPuzzle(int id, int x, int y, int dir, int ticks, const 
 
 void Special::createArrowSecretDoor(int id)
 {
+	using Deco::Arrow;
+	using Deco::Color::Any;
+	using enum Arrow::Direction;
 	generator->backgroundColor = { 0, 0, 0, 1 };
 	generator->arrowColor = { 1, 0.6f, 0, 1 };
 	generator->successColor = { 1, 0.6f, 0, 1 };
 	generator->initPanel(id);
 	generator->clear();
-	generator->set(1, 1, Decoration::Arrow | (3 << 12) | (4 << 16));
-	generator->set(1, 5, Decoration::Arrow | (3 << 12) | (2 << 16));
-	generator->set(1, 9, Decoration::Arrow | (3 << 12) | (5 << 16));
-	generator->set(9, 1, Decoration::Arrow | (3 << 12) | (7 << 16));
-	generator->set(9, 5, Decoration::Arrow | (3 << 12) | (3 << 16));
-	generator->set(9, 9, Decoration::Arrow | (3 << 12) | (6 << 16));
+	generator->set(1, 1, Arrow(Any, 3, UpRight));
+	generator->set(1, 5, Arrow(Any, 3, Right));
+	generator->set(1, 9, Arrow(Any, 3, UpLeft));
+	generator->set(9, 1, Arrow(Any, 3, DownRight));
+	generator->set(9, 5, Arrow(Any, 3, Left));
+	generator->set(9, 9, Arrow(Any, 3, DownLeft));
 	generator->write(id);
 }
 
-void Special::generateCenterPerspective(int id, const std::vector<std::pair<int, int>>& symbolVec, int symbolType)
+void Special::generateCenterPerspective(
+	int id,
+	const std::vector<DecoPair>& symbolVec,
+	Deco::Symbol symbolType)
 {
-	std::vector<std::vector<Point>> obstructions = { { { 5, 0 },{ 5, 2 },{ 5, 4 } },{ { 5, 6 },{ 5, 8 },{ 5, 10 } },{ { 0, 5 },{ 2, 5 },{ 4, 5 } },{ { 6, 5 },{ 8, 5 },{ 10, 5 } } };
+	std::vector<std::vector<Point>> obstructions =
+		{{{5, 0}, {5, 2}, {5, 4}},
+		 {{5, 6}, {5, 8}, {5, 10}},
+		 {{0, 5}, {2, 5}, {4, 5}},
+		 {{6, 5}, {8, 5}, {10, 5}}};
 	generator->setObstructions(obstructions);
 	do {
 		generator->setFlagOnce(Generate::Config::DisableWrite);
 		generator->generate(id, symbolVec);
-	} while ((generator->get(5, 5) & 0xFF00) != symbolType);
+	} while ((generator->get(5, 5).symbol) != symbolType);
 	generator->write(id);
 }
 
@@ -1634,7 +1811,7 @@ void Special::generateSpecularPuzzle(int id, int gridShape, std::vector<std::pai
 	std::vector<int> solution = generatePathByConnections(connectionsA, connectionsB, flags, symmetry, shadows);
 	memory->WriteArray<int>(id, SEQUENCE, solution, true);
 	memory->WritePanelData<int>(id, SEQUENCE_LEN, solution.size());
-	TextureLoader::get()->generateSpecTexture(id);
+	//TextureLoader::get()->generateSpecTexture(id);
 }
 
 void Special::setPosition(int id, float x, float y, float z)
@@ -1663,7 +1840,7 @@ void Special::setScale(int id, float scale)
 }
 
 std::vector<int> Special::generatePathByConnections(std::vector<int>& connectionsA, std::vector<int>& connectionsB, std::vector<int>& flags,
-	std::vector<int>& symmetry, std::vector<std::pair<int, int>> shadows)
+	std::vector<int>& symmetry, std::vector<std::pair<int, int>> shadows) // TODO: Convert the pair to Point
 {
 	std::vector<std::vector<int>> paths;
 	std::vector<std::vector<int>> solutions;
@@ -1709,7 +1886,7 @@ std::vector<int> Special::generatePathByConnections(std::vector<int>& connection
 	return sol;
 }
 
-bool Special::isAmbiguous(std::vector<int>& path, std::vector<std::vector<int>>& solutions, std::vector<std::pair<int, int>> shadows)
+bool Special::isAmbiguous(std::vector<int>& path, std::vector<std::vector<int>>& solutions, std::vector<std::pair<int, int>> shadows) // TODO: Convert the pair to Point
 {
 	std::set<std::pair<int, int>> sshadows(shadows.begin(), shadows.end());
 	std::set<std::pair<int, int>> spath;
@@ -1750,6 +1927,7 @@ bool Special::isAmbiguous(std::vector<int>& path, std::vector<std::vector<int>>&
 	return false;
 }
 
+// Takes a string of text and converts it to a series of line segments, drawable on a puzzle
 void Special::createText(int id, std::string text, std::vector<float>& intersections, std::vector<int>& connectionsA, std::vector<int>& connectionsB,
 		float left, float right, float top, float bottom) {
 	//012
@@ -1782,7 +1960,7 @@ void Special::createText(int id, std::string text, std::vector<float>& intersect
 		{ 'x',{ 0,8,4,2,6 } },
 		{ 'y',{ 0,4,7,4,2 } },
 		{ 'z',{ 0,2,6,8 } },
-		{ '0',{ 0,2,8,6,0 } },
+		{ '0',{ 2,8,6,0,2,6 } },
 		{ '1',{ 0,1,7,6,8 } },
 		{ '2',{ 0,2,5,3,6,8 } },
 		{ '3',{ 0,2,5,3,5,8,6 } },
@@ -1824,12 +2002,12 @@ void Special::drawText(int id, std::vector<float>& intersections, std::vector<in
 		intersectionFlags.emplace_back(0);
 	}
 	intersections.emplace_back(finalLine[0]);
-	intersectionFlags.emplace_back(Decoration::Start);
+	intersectionFlags.emplace_back(Deco::kStart);
 
 	for (int i = 1; i < finalLine.size(); i++) {
 		intersections.emplace_back(finalLine[i]);
 		if (i % 2 == 0) {
-			intersectionFlags.emplace_back(i == finalLine.size() - 2 ? Decoration::Exit : 0);
+			intersectionFlags.emplace_back(i == finalLine.size() - 2 ? Deco::kExit : 0);
 			connectionsA.emplace_back(static_cast<int>(intersectionFlags.size()) - 2); connectionsB.emplace_back(static_cast<int>(intersectionFlags.size()) - 1);
 		}
 	}
@@ -1968,147 +2146,144 @@ std::map<int, int> Special::correctShapesById = {};
 int sed = 0;
 //For testing/debugging purposes only
 void Special::test() {
-	//Random::seed(sed++);
-	Generate generate;
-	Memory* memory = Memory::get();
-	//auto texloader = TextureLoader::get();
-	//texloader->forceLoadDesertTextures();
-	//memory->LoadPackage("globals");
+// 	//Random::seed(sed++);
+// 	Generate generate;
+// 	Memory* memory = Memory::get();
+// 	//auto texloader = TextureLoader::get();
+// 	//texloader->forceLoadDesertTextures();
+// 	//memory->LoadPackage("globals");
+// 	return;
 
+// 	//Surface
+// 	setOrientation(0x00698, -20, -40, 0);
+// 	generateSpecularPuzzle(0x00698, TRIANGLE_GRID_3x3);
+// 	memory->WritePanelData<int>(0x00698, POWER_OFF_ON_FAIL, { 0 });
 
+// 	setPosition(0x2752B, -174.4f, 173.8f, 15.3f);
+// 	setPosition(0x2752F, -174.7f, 173.73f, 15.32f);
+// 	setPosition(0x27530, -174.7f, 173.4f, 15.34f);
+// 	setOrientation(0x0048F, -23, 5, 0);
+// 	generateSpecularPuzzle(0x0048F, GRID_4x4, { {0,5},{15,20},{1,6},{11,16},{16,21},{17,22},{3,8},{8,13},
+// 		{0,1},{1,2},{2,3},{3,4},{5,6},{10,11},{11,12},{12,13},{13,14},{15,16},{16,17},{20,21},{21,22},{22,23} });
+// 	memory->WritePanelData<int>(0x0048F, POWER_OFF_ON_FAIL, { 0 });
 
-	return;
+// 	setPosition(0x274F8, -174.3, 163.12f, 18.2f);
+// 	Quaternion rot(10, 80, 90);
+// 	setOrientation(0x274F8, rot.x, rot.y, rot.z, rot.w * 3.0f);
+// 	generateSpecularPuzzle(0x09F92, TRIANGLE_GRID_4x4);
+// 	memory->WritePanelData<int>(0x09F92, POWER_OFF_ON_FAIL, { 0 });
+// 	memory->WritePanelData<float>(0x09FA1, OPEN_RATE, { 0.2f });  // Desert Surface 3 Control, 2x
 
-	//Surface
-	setOrientation(0x00698, -20, -40, 0);
-	generateSpecularPuzzle(0x00698, TRIANGLE_GRID_3x3);
-	memory->WritePanelData<int>(0x00698, POWER_OFF_ON_FAIL, { 0 });
+// 	generateSpecularPuzzle(0x0A036, TRIANGLE_GRID_3x3);
+// 	switch (Random::rand() % 3) {
+// 		case 0: setOrientation(0x0A036, -22, -60, 0); break;
+// 		case 1: setOrientation(0x0A036, -9, -55, 0); break;
+// 		case 2: setOrientation(0x0A036, -7, -78, 0); break;
+// 	}
+// 	generateSpecularPuzzle(0x09DA6, TRIANGLE_GRID_3x3);
+// 	switch (Random::rand() % 3) {
+// 		case 0: setOrientation(0x09DA6, -17, -15, 0); break;
+// 		case 1: setOrientation(0x09DA6, -20, -15, 0); break;
+// 		case 2: setOrientation(0x09DA6, -30, -15, 0); break;
+// 	}
+// 	generateSpecularPuzzle(0x0A049, TRIANGLE_GRID_3x3);
+// 	switch (Random::rand() % 3) {
+// 		case 0: setOrientation(0x0A049, -25, 5, 0); break;
+// 		case 1: setOrientation(0x0A049, -17, 0, 0); break;
+// 		case 2: setOrientation(0x0A049, 20, 10, 0); break;
+// 	}
 
-	setPosition(0x2752B, -174.4f, 173.8f, 15.3f);
-	setPosition(0x2752F, -174.7f, 173.73f, 15.32f);
-	setPosition(0x27530, -174.7f, 173.4f, 15.34f);
-	setOrientation(0x0048F, -23, 5, 0);
-	generateSpecularPuzzle(0x0048F, GRID_4x4, { {0,5},{15,20},{1,6},{11,16},{16,21},{17,22},{3,8},{8,13},
-		{0,1},{1,2},{2,3},{3,4},{5,6},{10,11},{11,12},{12,13},{13,14},{15,16},{16,17},{20,21},{21,22},{22,23} });
-	memory->WritePanelData<int>(0x0048F, POWER_OFF_ON_FAIL, { 0 });
+// 	generateSpecularPuzzle(0x0A053, TRIANGLE_GRID_3x3); //What to do?
 
-	setPosition(0x274F8, -174.3, 163.12f, 18.2f);
-	Quaternion rot(10, 80, 90);
-	setOrientation(0x274F8, rot.x, rot.y, rot.z, rot.w * 3.0f);
-	generateSpecularPuzzle(0x09F92, TRIANGLE_GRID_4x4);
-	memory->WritePanelData<int>(0x09F92, POWER_OFF_ON_FAIL, { 0 });
-	memory->WritePanelData<float>(0x09FA1, OPEN_RATE, { 0.2f });  // Desert Surface 3 Control, 2x
+// 	generateSpecularPuzzle(0x09F94);
+// 	setPower(0x09F94, false); // Turn off desert surface 8
+// 	memory->WritePanelData<float>(0x09F95, OPEN_RATE, { 1000.0f });  // Desert Surface Final Control, 100000x
 
-	generateSpecularPuzzle(0x0A036, TRIANGLE_GRID_3x3);
-	switch (Random::rand() % 3) {
-		case 0: setOrientation(0x0A036, -22, -60, 0); break;
-		case 1: setOrientation(0x0A036, -9, -55, 0); break;
-		case 2: setOrientation(0x0A036, -7, -78, 0); break;
-	}
-	generateSpecularPuzzle(0x09DA6, TRIANGLE_GRID_3x3);
-	switch (Random::rand() % 3) {
-		case 0: setOrientation(0x09DA6, -17, -15, 0); break;
-		case 1: setOrientation(0x09DA6, -20, -15, 0); break;
-		case 2: setOrientation(0x09DA6, -30, -15, 0); break;
-	}
-	generateSpecularPuzzle(0x0A049, TRIANGLE_GRID_3x3);
-	switch (Random::rand() % 3) {
-		case 0: setOrientation(0x0A049, -25, 5, 0); break;
-		case 1: setOrientation(0x0A049, -17, 0, 0); break;
-		case 2: setOrientation(0x0A049, 20, 10, 0); break;
-	}
-
-	generateSpecularPuzzle(0x0A053, TRIANGLE_GRID_3x3); //What to do?
-
-	generateSpecularPuzzle(0x09F94);
-	setPower(0x09F94, false); // Turn off desert surface 8
-	memory->WritePanelData<float>(0x09F95, OPEN_RATE, { 1000.0f });  // Desert Surface Final Control, 100000x
-
-	//Light Room
+// 	//Light Room
 	
-	generate.setFlag(Generate::Config::StartEdgeOnly);
-	generate.setFlag(Generate::Config::WriteInvisible);
-	generate.setSymmetry(Panel::Rotational);
-	generate.setGridSize(5, 5);
-	generate.generate(0x00422, { {Decoration::Start, 1}, {Decoration::Exit, 1} });
-	generate.initPanel(0x00422);
-	generateSpecularPuzzle(0x00422);
-	setOrientation(0x00422, -44, -8, 0);
+// 	generate.setFlag(Generate::Config::StartEdgeOnly);
+// 	generate.setFlag(Generate::Config::WriteInvisible);
+// 	generate.setSymmetry(Panel::Rotational);
+// 	generate.setGridSize(5, 5);
+// 	generate.generate(0x00422, { {Deco::kStart, 1}, {Deco::kExit, 1} });
+// 	generate.initPanel(0x00422);
+// 	generateSpecularPuzzle(0x00422);
+// 	setOrientation(0x00422, -44, -8, 0);
 
-	generate.setSymmetry(Panel::Vertical);
-	generate.generate(0x006E3, { {Decoration::Start, 1}, {Decoration::Exit, 1 }
-});
-	generate.initPanel(0x006E3);
-	generateSpecularPuzzle(0x006E3);
-	setOrientation(0x006E3, -10, -40, 0);
+// 	generate.setSymmetry(Panel::Vertical);
+// 	generate.generate(0x006E3, { {Deco::kStart, 1}, {Deco::kExit, 1 }
+// });
+// 	generate.initPanel(0x006E3);
+// 	generateSpecularPuzzle(0x006E3);
+// 	setOrientation(0x006E3, -10, -40, 0);
 
-	generate.setGridSize(6, 6);
-	generate.setSymmetry(Panel::Horizontal);
-	generate.generate(0x0A02D, { {Decoration::Start, 1}, {Decoration::Exit, 1 }
-});
-	generate.initPanel(0x0A02D);
-	generateSpecularPuzzle(0x0A02D);
-	generate.resetConfig();
+// 	generate.setGridSize(6, 6);
+// 	generate.setSymmetry(Panel::Horizontal);
+// 	generate.generate(0x0A02D, { {Deco::kStart, 1}, {Deco::kExit, 1 }
+// });
+// 	generate.initPanel(0x0A02D);
+// 	generateSpecularPuzzle(0x0A02D);
+// 	generate.resetConfig();
 
-	//Pond Room
+// 	//Pond Room
 
-	generate.setFlag(Generate::Config::WriteSpecular);
-	generate.setGridSize(4, 4);
-	generate.setSymbol(Decoration::Start, 0, 8);
-	generate.setSymbol(Decoration::Exit, 8, 0);
-	generate.generate(0x00C72, { {Decoration::Stone | Decoration::Color::Black, 6}, {Decoration::Stone | Decoration::Color::Green, 6} });
-	generate.setSymbol(Decoration::Start, 0, 8);
-	generate.setSymbol(Decoration::Exit, 8, 0);
-	generate.generate(0x0129D, { {Decoration::Star | Decoration::Color::Red, 6}, {Decoration::Star | Decoration::Color::Green, 6}, {Decoration::Star | Decoration::Color::Black, 4} });
-	generate.setSymbol(Decoration::Start, 0, 8);
-	generate.setSymbol(Decoration::Exit, 8, 0);
-	generate.generate(0x008BB, { {Decoration::Poly | Decoration::Color::Black, 1},{ Decoration::Poly | Decoration::Color::Red, 2} });
-	generate.setSymbol(Decoration::Start, 0, 8);
-	generate.setSymbol(Decoration::Exit, 8, 0);
-	generate.blockPos = { { 3, 7 } };
-	generate.generate(0x0078D, { {Decoration::Triangle | Decoration::Color::Black, 4}, {Decoration::Triangle | Decoration::Color::Red, 5}, {Decoration::Triangle | Decoration::Color::Green, 1} });
-	generate.setSymbol(Decoration::Start, 0, 8);
-	generate.setSymbol(Decoration::Exit, 8, 0);
-	generate.generate(0x18313, { {Decoration::Eraser | Decoration::Color::Black, 1}, {Decoration::Poly | Decoration::Color::Red, 3} });
-	return;
+// 	generate.setFlag(Generate::Config::WriteSpecular);
+// 	generate.setGridSize(4, 4);
+// 	generate.setSymbol(Deco::kStart, 0, 8);
+// 	generate.setSymbol(Deco::kExit, 8, 0);
+// 	generate.generate(0x00C72, { {Decoration::Stone | Decoration::Color::Black, 6}, {Decoration::Stone | Decoration::Color::Green, 6} });
+// 	generate.setSymbol(Deco::kStart, 0, 8);
+// 	generate.setSymbol(Deco::kExit, 8, 0);
+// 	generate.generate(0x0129D, { {Decoration::Star | Decoration::Color::Red, 6}, {Decoration::Star | Decoration::Color::Green, 6}, {Decoration::Star | Decoration::Color::Black, 4} });
+// 	generate.setSymbol(Deco::kStart, 0, 8);
+// 	generate.setSymbol(Deco::kExit, 8, 0);
+// 	generate.generate(0x008BB, { {Decoration::Poly | Decoration::Color::Black, 1},{ Decoration::Poly | Decoration::Color::Red, 2} });
+// 	generate.setSymbol(Deco::kStart, 0, 8);
+// 	generate.setSymbol(Deco::kExit, 8, 0);
+// 	generate.blockPos = { { 3, 7 } };
+// 	generate.generate(0x0078D, { {Decoration::Triangle | Decoration::Color::Black, 4}, {Decoration::Triangle | Decoration::Color::Red, 5}, {Decoration::Triangle | Decoration::Color::Green, 1} });
+// 	generate.setSymbol(Deco::kStart, 0, 8);
+// 	generate.setSymbol(Deco::kExit, 8, 0);
+// 	generate.generate(0x18313, { {Deco::Eraser(Deco::Color::Black), 1}, {Decoration::Poly | Decoration::Color::Red, 3} });
+// 	return;
 
-	//Flood Room
+// 	//Flood Room
 
-	memory->WritePanelData<float>(0x01300, OPEN_RATE, { 0.09f });  // Desert Flood Water Level, 3x
-	generateSpecularPuzzle(0x04D18);
-	generateSpecularPuzzle(0x01205);
-	generateSpecularPuzzle(0x181AB);
-	generateSpecularPuzzle(0x0117A);
-	generateSpecularPuzzle(0x17ECA);
-	std::vector<float> positions = memory->ReadArray<float>(0x18076, DOT_POSITIONS, 38);
-	if (positions[1] > 0.9f) {
-		for (int i = 1; i < positions.size() - 1; i += 2) {
-			positions[i] -= 0.03f;
-		}
-		memory->WriteArray<float>(0x18076, DOT_POSITIONS, positions);
-	}
-	generateSpecularPuzzle(0x18076); //Rectangular
-	//setTargetAndDeactivate(0x17ECA, 0x18076); // Change desert floating target to desert flood final
-	//Final Room
-	generateSpecularPuzzle(0x0A15C); //Concave
-	generateSpecularPuzzle(0x09FFF); //Convex
-	generate.setSymbol(Decoration::Start, 0, 0);
-	generate.setSymbol(Decoration::Exit, 12, 6);
-	generate.setGridSize(6, 3);
-	generate.generate(0x0A15F);
-	generate.initPanel(0x0A15F);
-	generate._panel->minx = 0.05f;
-	generate._panel->maxx = 0.9f;
-	generate.generate(0x0A15F);
-	generateSpecularPuzzle(0x0A15F); //Tall
-	generateSpecularPuzzle(0x17C31); //Glass
-	generateSpecularPuzzle(0x012D7); //Final
-	memory->WritePanelData<float>(0x012C8, OPEN_RATE, { 0.06f });  // Desert Final Far Control, 2x	
+// 	memory->WritePanelData<float>(0x01300, OPEN_RATE, { 0.09f });  // Desert Flood Water Level, 3x
+// 	generateSpecularPuzzle(0x04D18);
+// 	generateSpecularPuzzle(0x01205);
+// 	generateSpecularPuzzle(0x181AB);
+// 	generateSpecularPuzzle(0x0117A);
+// 	generateSpecularPuzzle(0x17ECA);
+// 	std::vector<float> positions = memory->ReadArray<float>(0x18076, DOT_POSITIONS, 38);
+// 	if (positions[1] > 0.9f) {
+// 		for (int i = 1; i < positions.size() - 1; i += 2) {
+// 			positions[i] -= 0.03f;
+// 		}
+// 		memory->WriteArray<float>(0x18076, DOT_POSITIONS, positions);
+// 	}
+// 	generateSpecularPuzzle(0x18076); //Rectangular
+// 	//setTargetAndDeactivate(0x17ECA, 0x18076); // Change desert floating target to desert flood final
+// 	//Final Room
+// 	generateSpecularPuzzle(0x0A15C); //Concave
+// 	generateSpecularPuzzle(0x09FFF); //Convex
+// 	generate.setSymbol(Deco::kStart, 0, 0);
+// 	generate.setSymbol(Deco::kExit, 12, 6);
+// 	generate.setGridSize(6, 3);
+// 	generate.generate(0x0A15F);
+// 	generate.initPanel(0x0A15F);
+// 	generate._panel->minx = 0.05f;
+// 	generate._panel->maxx = 0.9f;
+// 	generate.generate(0x0A15F);
+// 	generateSpecularPuzzle(0x0A15F); //Tall
+// 	generateSpecularPuzzle(0x17C31); //Glass
+// 	generateSpecularPuzzle(0x012D7); //Final
+// 	memory->WritePanelData<float>(0x012C8, OPEN_RATE, { 0.06f });  // Desert Final Far Control, 2x	
 
-	//Ensure textures are preserved
-	memory->LoadPackage("save_58392");
-	memory->LoadPackage("save_58473");
-	memory->LoadPackage("save_58413");
-	memory->LoadPackage("save_58440");
-	memory->LoadPackage("globals");
+// 	//Ensure textures are preserved
+// 	memory->LoadPackage("save_58392");
+// 	memory->LoadPackage("save_58473");
+// 	memory->LoadPackage("save_58413");
+// 	memory->LoadPackage("save_58440");
+// 	memory->LoadPackage("globals");
 }

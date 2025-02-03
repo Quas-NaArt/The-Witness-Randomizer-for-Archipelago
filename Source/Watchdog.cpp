@@ -1,8 +1,10 @@
 
 #include "Watchdog.h"
-#include "Quaternion.h"
+
 #include <thread>
+
 #include "Panel.h"
+#include "Quaternion.h"
 #include "Randomizer.h"
 
 void Watchdog::start()
@@ -33,27 +35,27 @@ void KeepWatchdog::action() {
 }
 
 //Arrow Watchdog - To run the arrow puzzles
-
-ArrowWatchdog::ArrowWatchdog(int id) : Watchdog(0.1f) {
+constexpr const std::array<struct Point, 8>& ArrowWatchdog::kDirections = {
+		Point(0, 2), Point(0, -2), Point(2, 0), Point(-2, 0),
+		Point(2, 2), Point(2, -2), Point(-2, -2), Point(-2, 2),
+	};
+ArrowWatchdog::ArrowWatchdog(int id, int pillarWidth) : Watchdog(0.1f),
+	id{id}, pillarWidth{pillarWidth}
+	{
 	Panel panel(id);
-	this->id = id;
-	grid = backupGrid = panel._grid;
+	grid = backupGrid = panel.grid;
 	width = static_cast<int>(grid.size());
 	height = static_cast<int>(grid[0].size());
-	pillarWidth = tracedLength = 0;
-	complete = false;
 	style = ReadPanelData<int>(id, STYLE_FLAGS);
-	DIRECTIONS = { Point(0, 2), Point(0, -2), Point(2, 0), Point(-2, 0), Point(2, 2), Point(2, -2), Point(-2, -2), Point(-2, 2) };
 	symmetryData = ReadArray<int>(id, REFLECTION_DATA, ReadPanelData<int>(id, NUM_DOTS));
-	for (Endpoint& e : panel._endpoints) {
+	for (const Endpoint& e : panel.endpoints) {
 		exits.emplace_back(panel.xy_to_loc(e.GetX(), e.GetY()));
-;	}
-	exitPoint = (width / 2 + 1) * (height / 2 + 1);
-}
-
-ArrowWatchdog::ArrowWatchdog(int id, int pillarWidth) : ArrowWatchdog(id) {
-	this->pillarWidth = pillarWidth;
-	if (pillarWidth > 0) exitPoint = (width / 2) * (height / 2 + 1);
+	}
+	if (pillarWidth > 0) {
+		exitPoint = (width / 2) * (height / 2 + 1);
+	} else {
+		exitPoint = (width / 2 + 1) * (height / 2 + 1);
+	}
 }
 
 void ArrowWatchdog::action() {
@@ -102,8 +104,9 @@ void ArrowWatchdog::initPath()
 	complete = false;
 	if (traced.size() == 0) return;
 	int lastp1 = 0;
-	for (const SolutionPoint& p : traced) {
-		int p1 = p.pointA, p2 = p.pointB;
+	for (const SolutionPoint& solutionPoint : traced) {
+		int p1 = solutionPoint.pointA;
+		int p2 = solutionPoint.pointB;
 		if (std::find(exits.begin(), exits.end(), p2) != exits.end()) {
 			complete = true;
 		}
@@ -122,15 +125,15 @@ void ArrowWatchdog::initPath()
 		if (pillarWidth > 0) {
 			x1 = (p1 % (width / 2)) * 2, y1 = height - 1 - (p1 / (width / 2)) * 2;
 			x2 = (p2 % (width / 2)) * 2, y2 = height - 1 - (p2 / (width / 2)) * 2;
-			grid[x1][y1] = PATH;
-			grid[x2][y2] = PATH;
-			if (x1 == x2 || x1 == x2 + 2 || x1 == x2 - 2) grid[(x1 + x2) / 2][(y1 + y2) / 2] = PATH;
-			else grid[width - 1][(y1 + y2) / 2] = PATH;
+			grid[x1][y1] = Deco::kPath;
+			grid[x2][y2] = Deco::kPath;
+			if (x1 == x2 || x1 == x2 + 2 || x1 == x2 - 2) grid[(x1 + x2) / 2][(y1 + y2) / 2] = Deco::kPath;
+			else grid[width - 1][(y1 + y2) / 2] = Deco::kPath;
 		}
 		else {
-			grid[x1][y1] = PATH;
-			grid[x2][y2] = PATH;
-			grid[(x1 + x2) / 2][(y1 + y2) / 2] = PATH;
+			grid[x1][y1] = Deco::kPath;
+			grid[x2][y2] = Deco::kPath;
+			grid[(x1 + x2) / 2][(y1 + y2) / 2] = Deco::kPath;
 		}
 	}
 }
@@ -141,20 +144,20 @@ bool ArrowWatchdog::checkArrow(int x, int y)
 	int symbol = grid[x][y];
 	if ((symbol & 0x700) == Decoration::Triangle && (symbol & 0xf0000) != 0) {
 		int count = 0;
-		if (grid[x - 1][y] == PATH) count++;
-		if (grid[x + 1][y] == PATH) count++;
-		if (grid[x][y - 1] == PATH) count++;
-		if (grid[x][y + 1] == PATH) count++;
+		if (grid[x - 1][y] == Deco::kPath) count++;
+		if (grid[x + 1][y] == Deco::kPath) count++;
+		if (grid[x][y - 1] == Deco::kPath) count++;
+		if (grid[x][y + 1] == Deco::kPath) count++;
 		return count == (symbol >> 16);
 	}
 	if ((symbol & 0x700) != Decoration::Arrow)
 		return true;
 	int targetCount = (symbol & 0xf000) >> 12;
-	Point dir = DIRECTIONS[(symbol & 0xf0000) >> 16];
+	Point dir = kDirections[(symbol & 0xf0000) >> 16];
 	x += dir.first / 2; y += dir.second / 2;
 	int count = 0;
 	while (x >= 0 && x < width && y >= 0 && y < height) {
-		if (grid[x][y] == PATH) {
+		if (grid[x][y] == Deco::kPath) {
 			if (++count > targetCount)
 				return false;
 		}
@@ -168,20 +171,20 @@ bool ArrowWatchdog::checkArrowPillar(int x, int y)
 	int symbol = grid[x][y];
 	if ((symbol & 0x700) == Decoration::Triangle && (symbol & 0xf0000) != 0) {
 		int count = 0;
-		if (grid[x - 1][y] == PATH) count++;
-		if (grid[x + 1][y] == PATH) count++;
-		if (grid[x][y - 1] == PATH) count++;
-		if (grid[x][y + 1] == PATH) count++;
+		if (grid[x - 1][y] == Deco::kPath) {count++;}
+		if (grid[x + 1][y] == Deco::kPath) {count++;}
+		if (grid[x][y - 1] == Deco::kPath) {count++;}
+		if (grid[x][y + 1] == Deco::kPath) {count++;}
 		return count == (symbol >> 16);
 	}
 	if ((symbol & 0x700) != Decoration::Arrow)
 		return true;
 	int targetCount = (symbol & 0xf000) >> 12;
-	Point dir = DIRECTIONS[(symbol & 0xf0000) >> 16];
+	Point dir = kDirections.at((symbol & 0xf0000) >> 16);
 	x = (x + (dir.first > 2 ? -2 : dir.first) / 2 + pillarWidth) % pillarWidth; y += dir.second / 2;
 	int count = 0;
 	while (y >= 0 && y < height) {
-		if (grid[x][y] == PATH) {
+		if (grid[x][y] == Deco::kPath) {
 			if (++count > targetCount) return false;
 		}
 		x = (x + dir.first + pillarWidth) % pillarWidth; y += dir.second;
@@ -216,7 +219,12 @@ bool BridgeWatchdog::checkTouch(int id)
 	int numIntersections = ReadPanelData<int>(id, NUM_DOTS);
 	std::vector<int> intersectionFlags = ReadArray<int>(id, DOT_FLAGS, numIntersections);
 	std::vector<SolutionPoint> edges = ReadArray<SolutionPoint>(id, TRACED_EDGE_DATA, length);
-	for (const SolutionPoint& sp : edges) if (intersectionFlags[sp.pointA] == Decoration::Dot_Intersection || intersectionFlags[sp.pointB] == Decoration::Dot_Intersection) return true;
+	for (const SolutionPoint& sp : edges) {
+		if (intersectionFlags[sp.pointA] == Decoration::Dot_Intersection ||
+			intersectionFlags[sp.pointB] == Decoration::Dot_Intersection) {
+			return true;
+		}
+	}
 	return false;
 }
 
@@ -252,9 +260,9 @@ void JungleWatchdog::action()
 	if (!tracedptr) return;
 	std::vector<SolutionPoint> traced = ReadArray<SolutionPoint>(id, TRACED_EDGE_DATA, numTraced);
 	int seqIndex = 0;
-	for (const SolutionPoint& p : traced) {
-		if ((sizes[p.pointA] & IntersectionFlags::DOT) == 0) continue;
-		if (sizes[p.pointA] & (0x1000 << (state ? correctSeq1[seqIndex] : correctSeq2[seqIndex])))
+	for (const SolutionPoint& sPoint : traced) {
+		if ((sizes[sPoint.pointA] & IntersectionFlags::DOT) == 0) continue;
+		if (sizes[sPoint.pointA] & (0x1000 << (state ? correctSeq1[seqIndex] : correctSeq2[seqIndex])))
 			seqIndex++;
 		else return;
 		if (seqIndex >= 1) {

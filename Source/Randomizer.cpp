@@ -22,17 +22,17 @@ std::vector<int> copyWithoutElements(const std::vector<int>& input, const std::v
 }
 
 void Randomizer::GenerateNormal(HWND loadingHandle) {
-	std::shared_ptr<PuzzleList> puzzles = std::make_shared<PuzzleList>();
-	puzzles->setSeed(seed, seedIsRNG, colorblind);
+	std::unique_ptr<PuzzleList> puzzles = std::make_unique<PuzzleList>(loadingHandle, seed, seedIsRNG, colorblind);
 	puzzles->GenerateAllN();
 	if (doubleMode) ShufflePanels(false);
 }
 
 void Randomizer::GenerateHard(HWND loadingHandle) {
-	std::shared_ptr<PuzzleList> puzzles = std::make_shared<PuzzleList>();
-	puzzles->setSeed(seed, seedIsRNG, colorblind);
+	std::unique_ptr<PuzzleList> puzzles = std::make_unique<PuzzleList>(loadingHandle, seed, seedIsRNG, colorblind);
 	puzzles->GenerateAllH();
-	if (doubleMode) ShufflePanels(true);
+	if (doubleMode) {
+		ShufflePanels(true);
+	}
 	SetWindowText(loadingHandle, L"Starting watchdogs...");
 	Panel::StartArrowWatchdogs(_shuffleMapping);
 	SetWindowText(loadingHandle, L"Done!");

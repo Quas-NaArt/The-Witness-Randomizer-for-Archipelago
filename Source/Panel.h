@@ -1,23 +1,81 @@
 #pragma once
 
-#include <map>
 #include <stdint.h>
+
+#include <map>
+#include <memory>
 #include <tuple>
 #include <vector>
 
+#include "Decoration.h"
+#include "Memory.h"
+
 struct Point {
-	int first;
-	int second;
-	Point() { first = 0; second = 0; };
-	Point(int x, int y) { if (pillarWidth) first = (x + pillarWidth) % pillarWidth; else first = x; second = y; }
-	Point operator+(const Point& p) { return { first + p.first, second + p.second }; }
-	Point operator*(int d) { return { first * d, second * d }; }
-	Point operator/(int d) { return { first / d, second / d }; }
-	bool operator==(const Point& p) const { return first == p.first && second == p.second; };
-	bool operator!=(const Point& p) const { return first != p.first || second != p.second; };
-	friend bool operator<(const Point& p1, const Point& p2) { if (p1.first == p2.first) return p1.second < p2.second; return p1.first < p2.first; };
-	static int pillarWidth;
+	// Most functions are constexpr because they satisfy the requirements.
+	// i.e. if a Point is defined at compile time, it can be used at compile time.
+	// This can help with static_assert checks, for example.
+	// Symmetric binary operator overloads are friends to follow the principle of least surprise.
+	enum Alignment {
+		Row,
+		Column,
+		Intersection,
+		Space,
+	};
+
+	int first{0};
+	int second{0};
+
+	constexpr Point() {};
+	constexpr Point(int x, int y) : first{x}, second{y} {};
+
+	// Depends on the coordinate system. Investigate more later.
+	// Points have been observed for use in the puzzle grid as row/column and x/y
+	// Points have also been observed inside Poly shape descriptions, and those don't have intersections at all.
+	constexpr Alignment spot() {
+		if (first % 2) {
+			if (second % 2) {
+				return Space;
+			}
+			return Row;
+		} else if (second % 2) {
+			return Column;
+		}
+		return Intersection;
+	}
+
+	constexpr Point operator+(const Point& right) {
+		return {first + right.first, second + right.second};
+	};
+
+	constexpr Point operator/(int d) {
+		return {first / d, second / d};
+	};
+
+	constexpr friend bool operator==(const Point& left, const Point& right) {
+		return left.first == right.first && left.second == right.second;
+	};
+
+	constexpr friend bool operator!=(const Point& left, const Point& right) {
+		return left.first != right.first || left.second != right.second;
+	};
+
+	constexpr friend Point operator*(const int& left, const Point& right) {
+		return {right.first * left, right.second * left};
+	}
+	constexpr friend Point operator*(const Point& left, const int& right) {
+		// Let scalar multiplication of Points be commutative.
+		return right*left;
+	}
+
+	// Comparison operator is required for placement into std::set
+	constexpr friend bool operator<(const Point& p1, const Point& p2) {
+		if (p1.first == p2.first) {
+			return p1.second < p2.second;
+		}
+		return p1.first < p2.first;
+	};
 };
+static_assert(2 * ::Point(2, 2) * 2 == ::Point(16, 16) / 2);
 
 class Decoration
 {
@@ -98,62 +156,85 @@ public:
 		DOWN_RIGHT = 10
 	};
 
-	Endpoint(int x, int y, Direction dir, int flags) {
-		_x = x;
-		_y = y;
-		_dir = dir;
-		_flags = flags;
-	}
+	Endpoint(int x, int y, Direction dir, int flags)
+		: x{x}
+		, y{y}
+		, dir{dir}
+		, _flags{flags}
+		{}
 
-	int GetX() {return _x;}
-	void SetX(int x) {_x = x;}
-	int GetY() {return _y;}
-	void SetY(int y) {_y = y;}
-	Direction GetDir() {return _dir;}
-	int GetFlags() { return _flags; }
-	void SetDir(Direction dir) {_dir = dir;}
+// If there's public access for both get and set, why even make them private?
+	[[deprecated("Prefer public member access when both get & set are public.")]]
+	int GetX() const {return x;}
+	[[deprecated("Prefer public member access when both get & set are public.")]]
+	void SetX(int x) {this->x = x;}
+	[[deprecated("Prefer public member access when both get & set are public.")]]
+	int GetY() const {return y;}
+	[[deprecated("Prefer public member access when both get & set are public.")]]
+	void SetY(int y) {this->y = y;}
+	[[deprecated("Prefer public member access when both get & set are public.")]]
+	Direction GetDir() const {return dir;}
+	[[deprecated("Prefer public member access when both get & set are public.")]]
+	void SetDir(Direction dir) {this->dir = dir;}
+	
+	int GetFlags() const { return _flags; }
 
+	int x;
+	int y; 
+	Direction dir;
 private:
-	int _x, _y, _flags;
-	Direction _dir;
+	int _flags;
 };
 
 struct Color {
+	// Four-float Red-Green-Blue-Alpha color struct
+	// Assumption: Valid component values are [0..1]
+	// Limitations: No knowledge of color space or gamma power
+	//    It's fine for our limited less-than-artistic puposes.
 	float r;
 	float g;
 	float b;
 	float a;
-	friend bool operator <(const Color& lhs, const Color& rhs) {return lhs.r * 8 + lhs.g * 4 + lhs.b * 2 + lhs.a > rhs.r * 8 + rhs.g * 4 + rhs.b * 2 + rhs.a;}
+
+	// Used by std::less() as the Compare functor for std::set and std::map
+	constexpr friend bool operator<(const Color& lhs, const Color& rhs) {
+		return lhs.r * 8 + lhs.g * 4 + lhs.b * 2 + lhs.a < rhs.r * 8 + rhs.g * 4 + rhs.b * 2 + rhs.a;
+	};
+
+	// Will likely fail on arithmetically mutated floats
+	// Define an allowable precision if using more than literal value assignments.
+	constexpr friend bool operator==(const Color& lhs, const Color& rhs) {
+		return lhs.r == rhs.r && lhs.g == rhs.g && lhs.b == rhs.b && lhs.a == rhs.a;
+	};
 };
 
+namespace { // anonymous for testing
+	// Consider tossing these into a unit test module.
+	static_assert(Color{0,0,0,0} < Color{1,1,1,1});
+	//static_assert(std::hash(Color{0,0,0,0}) == std::hash(Color{0,0,0,0}));
+	//static_assert(std::hash(Color{0,0,0,0}) != std::hash(Color{1,1,1,1}));
+	static_assert(Color{0,0,0,0} == Color{0,0,0,0});
+}
+
 struct SolutionPoint {
-	int pointA, pointB, pointC, pointD;
-	float f1x, f1y, f2x, f2y, f3x, f3y, f4x, f4y;
-	int endnum;
+	int pointA;
+	int pointB;
+	[[maybe_unused]] int pointC;
+	[[maybe_unused]] int pointD;
+	[[maybe_unused]] float f1x;
+	[[maybe_unused]] float f1y;
+	[[maybe_unused]] float f2x;
+	[[maybe_unused]] float f2y;
+	[[maybe_unused]] float f3x;
+	[[maybe_unused]] float f3y;
+	[[maybe_unused]] float f4x;
+	[[maybe_unused]] float f4y;
+	[[maybe_unused]] int endnum;
 };
 
 class Panel
 {
 public:
-	Panel();
-	Panel(int id);
-
-	void Read();
-	void Read(int id) { this->id = id; Read(); }
-	void Write();
-	void Write(int id) { this->id = id; Write(); }
-
-	void SetSymbol(int x, int y, Decoration::Shape symbol, Decoration::Color color);
-	void SetShape(int x, int y, int shape, bool rotate, bool negative, Decoration::Color color);
-	void ClearSymbol(int x, int y);
-	void SetGridSymbol(int x, int y, Decoration::Shape symbol, Decoration::Color color);
-	void ClearGridSymbol(int x, int y);
-	void Resize(int width, int height);
-
-	Color GetBackgroundColor();
-
-	static void StartArrowWatchdogs(const std::map<int, int>& shuffleMappings = {});
-
 	enum Style {
 		SYMMETRICAL = 0x2, //Not on the town symmetry puzzles? IDK why.
 		NO_BLINK = 0x4,
@@ -172,26 +253,64 @@ public:
 		RotateLeft, RotateRight, FlipXY, FlipNegXY, ParallelH, ParallelV, ParallelHFlip, ParallelVFlip,
 		PillarParallel, PillarHorizontal, PillarVertical, PillarRotational
 	};
-	Symmetry symmetry;
 
-	float pathWidth;
-	enum ColorMode { Default, Reset, Alternate, WriteColors, Treehouse, TreehouseAlternate, Specular };
-	ColorMode colorMode;
-	bool decorationsOnly;
-	bool enableFlash;
+	enum ColorMode {
+		Default,
+		Reset,
+		Alternate,
+		WriteColors,
+		Treehouse,
+		TreehouseAlternate,
+		Specular
+	};
 
-private:
+	// Constructors //
+	Panel();
+	Panel(int id);
 
-	void ReadAllData();
-	void ReadIntersections();
-	void WriteIntersections();
-	void ReadDecorations();
-	void WriteDecorations();
+	// Destructor //
+	virtual ~Panel() = default;
 
-	Point get_sym_point(int x, int y, Symmetry symmetry)
+	// Initialize the panel based on in-game data for the panel ID
+	void Read(int id) {
+		this->id = id;
+		Read();
+	}
+
+	// Write the instance data to the game's RAM
+	void Write();
+	void Write(int id) {
+		this->id = id;
+		Write();
+	}
+
+	void SetSymbol(int x, int y, Decoration::Shape symbol, Decoration::Color color);
+	void SetShape(int x, int y, int shape, bool rotate, bool negative, Decoration::Color color);
+	void ClearSymbol(int x, int y);
+	void ClearGridSymbol(int x, int y);
+
+	// Place a Start node at the given point.
+	void PlaceStart(const Point& point) {
+		_startpoints.push_back(point);
+	};
+
+	// Place an Exit stub at the given point.
+	// Direction will be handled in the implementation.
+	void PlaceExit(const Point& point);
+	void SetGridSymbol(const Point& point, const Deco::Deco& symbol);
+	void Resize(int width, int height);
+
+	[[deprecated("TODO: GetBackgroundColor needs magic numbers removed")]]
+	Color GetBackgroundColor() const {
+		return Memory::get()->ReadPanelData<Color>(0x0008F, 0x110); // BACKGROUND_REGION_COLOR from Randomizer.h
+	}
+	// Given a Point and a Symmetry type, return the Point symmetrical to the input.
+	Point get_sym_point(const Point& point, const Symmetry symmetry) const
 	{
+		int x = point.first;
+		int y = point.second;
 		switch (symmetry) {
-		case None: return Point(x, y);
+		case None: return point;
 		case Symmetry::Horizontal: return Point(x, _height - 1 - y);
 		case Symmetry::Vertical: return Point(_width - 1 - x, y);
 		case Symmetry::Rotational: return Point(_width - 1 - x, _height - 1 - y);
@@ -207,83 +326,59 @@ private:
 		case Symmetry::PillarHorizontal: return Point(x + _width / 2, _height - 1 - y);
 		case Symmetry::PillarVertical: return Point( _width / 2 - x, y);
 		case Symmetry::PillarRotational: return Point(_width / 2 - x, _height - 1 - y);
-		}
-		return Point(x, y);
-	}
-
-	Point get_sym_point(int x, int y) { return get_sym_point(x, y, symmetry); }
-	Point get_sym_point(Point p) { return get_sym_point(p.first, p.second, symmetry); }
-	Point get_sym_point(Point p, Symmetry symmetry) { return get_sym_point(p.first, p.second, symmetry); }
-	Endpoint::Direction get_sym_dir(Endpoint::Direction direction, Symmetry symmetry) {
-		int dirIndex = -1;
-		if (direction == Endpoint::Direction::LEFT) dirIndex = 0;
-		if (direction == Endpoint::Direction::RIGHT) dirIndex = 1;
-		if (direction == Endpoint::Direction::UP) dirIndex = 2;
-		if (direction == Endpoint::Direction::DOWN) dirIndex = 3;
-		std::vector<Endpoint::Direction> mapping;
-		switch (symmetry) {
-		case Symmetry::Horizontal: mapping = { Endpoint::Direction::LEFT, Endpoint::Direction::RIGHT, Endpoint::Direction::DOWN, Endpoint::Direction::UP }; break;
-		case Symmetry::Vertical: mapping = { Endpoint::Direction::RIGHT, Endpoint::Direction::LEFT, Endpoint::Direction::UP, Endpoint::Direction::DOWN }; break;
-		case Symmetry::Rotational: mapping = { Endpoint::Direction::RIGHT, Endpoint::Direction::LEFT, Endpoint::Direction::DOWN, Endpoint::Direction::UP }; break;
-		case Symmetry::RotateLeft: mapping = { Endpoint::Direction::DOWN, Endpoint::Direction::UP, Endpoint::Direction::LEFT, Endpoint::Direction::RIGHT }; break;
-		case Symmetry::RotateRight: mapping = { Endpoint::Direction::UP, Endpoint::Direction::DOWN, Endpoint::Direction::RIGHT, Endpoint::Direction::LEFT }; break;
-		case Symmetry::FlipXY: mapping = { Endpoint::Direction::UP, Endpoint::Direction::DOWN, Endpoint::Direction::LEFT, Endpoint::Direction::RIGHT }; break;
-		case Symmetry::FlipNegXY: mapping = { Endpoint::Direction::DOWN, Endpoint::Direction::UP, Endpoint::Direction::RIGHT, Endpoint::Direction::LEFT }; break;
-		case Symmetry::ParallelH: mapping = { Endpoint::Direction::LEFT, Endpoint::Direction::RIGHT, Endpoint::Direction::UP, Endpoint::Direction::DOWN }; break;
-		case Symmetry::ParallelV: mapping = { Endpoint::Direction::LEFT, Endpoint::Direction::RIGHT, Endpoint::Direction::UP, Endpoint::Direction::DOWN }; break;
-		case Symmetry::ParallelHFlip: mapping = { Endpoint::Direction::RIGHT, Endpoint::Direction::LEFT, Endpoint::Direction::UP, Endpoint::Direction::DOWN }; break;
-		case Symmetry::ParallelVFlip: mapping = { Endpoint::Direction::LEFT, Endpoint::Direction::RIGHT, Endpoint::Direction::DOWN, Endpoint::Direction::UP }; break;
-		default: mapping = { Endpoint::Direction::LEFT, Endpoint::Direction::RIGHT, Endpoint::Direction::UP, Endpoint::Direction::DOWN }; break;
-		}
-		return mapping[dirIndex];
-	}
-	int get_num_grid_points() { return ((_width + 1) / 2) * ((_height + 1) / 2); }
-	int get_num_grid_blocks() { return (_width / 2) * (_height / 2);  }
-	int get_parity() { return (get_num_grid_points() + 1) % 2; }
-	Color get_color_rgb(int color) {
-		if (colorMode == ColorMode::Treehouse) {
-			switch (color) {
-			case 1: return { 0, 0, 0, 1 }; //Black
-			case 2: return { 1, 1, 1, 1 }; //White
-			case 3: return { 1, 0, 0, 1 }; //Red (Not used)
-			case 4: return { 1, 0, 1, 1 }; //Magenta
-			case 5: return { 1, 0.5, 0, 1 }; //Orange
-			case 6: return { 0, 1, 0, 1 }; //Green
-			default: return { 0, 0, 0, 0 };
-			}
-		}
-		else if (colorMode == ColorMode::TreehouseAlternate) {
-			switch (color) {
-			case 1: return { 0, 0, 0, 1 }; //Black
-			case 2: return { 0, 0, 1, 1 }; //White->Blue
-			case 3: return { 1, 0, 0, 1 }; //Red (Not used)
-			case 4: return { 1, 0, 1, 1 }; //Magenta
-			case 5: return { 1, 0.5, 0, 1 }; //Orange
-			case 6: return { 1, 1, 1, 1 }; //Green->White
-			default: return { 0, 0, 0, 0 };
-			}
-		}
-		switch (color) {
-		case Decoration::Color::Black: return { 0, 0, 0, 1 };
-		case Decoration::Color::White: return { 1, 1, 1, 1 };
-		case Decoration::Color::Red: return { 1, 0, 0, 1 };
-		case Decoration::Color::Green: return { 0, 1, 0, 1 };
-		case Decoration::Color::Blue: return { 0, 0, 1, 1 };
-		case Decoration::Color::Cyan: return { 0, 1, 1, 1 };
-		case Decoration::Color::Magenta: return { 1, 0, 1, 1 };
-		case Decoration::Color::Yellow: return { 1, 1, 0, 1 };
-		case Decoration::Color::Orange: return { 1, 0.5, 0, 1 };
-		case Decoration::Color::Purple: return { 0.5, 0, 1, 1 };
-		case Decoration::Color::X: {
-			Color xColor = GetBackgroundColor();
-			xColor.a = 1;
-			return xColor;
-		}
-		default: return { 0, 0, 0, 0 };
+		default:
+			throw std::exception("Call to get_sym_point with unimplemented Symmetry case");
 		}
 	}
 
-	std::pair<int, int> loc_to_xy(int location) {
+	// If not explicit, use the Panel instance's saved symmetry setting.
+	Point get_sym_point(const Point& point) const {
+		return get_sym_point(point, _symmetry);
+	}
+
+	static void StartArrowWatchdogs(const std::map<int, int>& shuffleMappings = {});
+
+
+	Symmetry _symmetry;
+	float pathWidth;
+	ColorMode colorMode;
+	bool decorationsOnly;
+	bool enableFlash;
+
+	// public read-only references to the private properties
+	// Try to refactor these in to minimize friend use.
+	const std::vector<std::vector<int>>& grid = _grid;
+	const int& width = _width;
+	const int& height = _height;
+	const std::vector<Point>& startpoints = _startpoints;
+	const std::vector<Endpoint>& endpoints = _endpoints;
+
+
+private:
+	void Read();
+
+	void ReadAllData();
+	void ReadIntersections();
+	void WriteIntersections();
+	void ReadDecorations();
+	void WriteDecorations();
+
+	Endpoint::Direction get_sym_dir(Endpoint::Direction direction, Symmetry symmetry) const;
+
+	int get_num_grid_points() const {
+		return ((_width + 1) / 2) * ((_height + 1) / 2);
+	}
+	int get_num_grid_blocks() const {
+		return (_width / 2) * (_height / 2);
+	}
+	int get_parity() const {
+		return (get_num_grid_points() + 1) % 2;
+	}
+
+
+	Color get_color_rgb(int color) const;
+
+	Point loc_to_xy(int location) const {
 		int height2 = (_height - 1) / 2;
 		int width2 = (_width + 1) / 2;
 
@@ -292,7 +387,9 @@ private:
 		return {x, y};
 	}
 
-	int xy_to_loc(int x, int y) {
+	// ArrowWatchdog could be a non-friend if it weren't for this.
+	// 
+	int xy_to_loc(int x, int y) const {
 		int height2 = (_height - 1) / 2;
 		int width2 = (_width + 1) / 2;
 
@@ -300,7 +397,9 @@ private:
 		return rowsFromBottom * width2 + x/2;
 	}
 
-	std::pair<int, int> dloc_to_xy(int location) {
+	// Converts a location from the in-game decoration array index
+	// into a Point struct for use in the randomizer's grid
+	Point dloc_to_xy(int location) const {
 		int height2 = (_height - 3) / 2;
 		int width2 = _width / 2;
 
@@ -309,7 +408,7 @@ private:
 		return {x, y};
 	}
 
-	int xy_to_dloc(int x, int y) {
+	int xy_to_dloc(int x, int y) const {
 		int height2 = (_height - 3) / 2;
 		int width2 = _width / 2;
 
@@ -317,22 +416,38 @@ private:
 		return rowsFromBottom * width2 + (x - 1)/2;
 	}
 
-	int locate_segment(int x, int y, std::vector<int>& connections_a, std::vector<int>& connections_b) {
+	// Point-based override of locate_segment
+	int locate_segment(Point point, std::vector<int>& connections_a, std::vector<int>& connections_b) const {
+		locate_segment(point.first, point.second, connections_a, connections_b);
+	};
+	//
+	int locate_segment(int x, int y, std::vector<int>& connections_a, std::vector<int>& connections_b) const {
 		for (int i = 0; i < connections_a.size(); i++) {
-			std::pair<int,int> coord1 = loc_to_xy(connections_a[i]);
-			std::pair<int,int> coord2 = loc_to_xy(connections_b[i]);
+			Point coord1 = loc_to_xy(connections_a[i]);
+			Point coord2 = loc_to_xy(connections_b[i]);
 			int x1 = coord1.first, y1 = coord1.second, x2 = coord2.first, y2 = coord2.second;
-			if (Point::pillarWidth) {
-				if ((x1 == (x - 1 + Point::pillarWidth) % Point::pillarWidth && x2 == (x + 1) % Point::pillarWidth && y1 == y && y2 == y) ||
-					(y1 == y - 1 && y2 == y + 1 && x1 == x && x2 == x)) {
+			if (_pillarWidth > 0) {
+				if ((x1 == (x - 1 + _pillarWidth) % _pillarWidth && // force positive modulus
+				     x2 == (x + 1) % _pillarWidth &&
+					 y1 == y &&
+					 y2 == y) ||
+					(y1 == y - 1 &&
+					 y2 == y + 1 &&
+					 x1 == x &&
+					 x2 == x)) {
 					return i;
 				}
 			}
-			else if ((x1 == x - 1 && x2 == x + 1 && y1 == y && y2 == y) ||
-				(y1 == y - 1 && y2 == y + 1 && x1 == x && x2 == x)) {
+			else if ((x1 == x - 1 &&
+					  x2 == x + 1 &&
+					  y1 == y &&
+					  y2 == y) ||
+					 (y1 == y - 1 &&
+					  y2 == y + 1 &&
+					  x1 == x &&
+					  x2 == x)) {
 				return i;
 			}
-			
 		}
 		return -1;
 	}
@@ -352,30 +467,14 @@ private:
 		return true;
 	}
 
-	bool break_segment_gap(int x, int y, std::vector<int>& connections_a, std::vector<int>& connections_b, std::vector<float>& intersections, std::vector<int>& intersectionFlags) {
-		int i = locate_segment(x, y, connections_a, connections_b);
-		if (i == -1) {
-			return false;
-		}
-		int other_connection = connections_b[i];
-		connections_b[i] = static_cast<int>(intersectionFlags.size() + 1);
-		connections_a.push_back(other_connection);
-		connections_b.push_back(static_cast<int>(intersectionFlags.size()));
-		if (!(_grid[x][y] & IntersectionFlags::GAP)) {
-			_grid[x][y] |= (x % 2 == 0 ? IntersectionFlags::COLUMN : IntersectionFlags::ROW);
-			connections_a.push_back(static_cast<int>(intersectionFlags.size()));
-			connections_b.push_back(static_cast<int>(intersectionFlags.size() + 1));
-		}
-		double xOffset = _grid[x][y] & IntersectionFlags::ROW ? 0.5 : 0;
-		double yOffset = _grid[x][y] & IntersectionFlags::COLUMN ? 0.5 : 0;
-		intersections.push_back(static_cast<float>(minx + (x + xOffset) * unitWidth));
-		intersections.push_back(static_cast<float>(miny + (_height - 1 - y - yOffset) * unitHeight));
-		intersections.push_back(static_cast<float>(minx + (x - xOffset) * unitWidth));
-		intersections.push_back(static_cast<float>(miny + (_height - 1 - y + yOffset) * unitHeight));
-		intersectionFlags.push_back(_grid[x][y]);
-		intersectionFlags.push_back(_grid[x][y]);
-		return true;
-	}
+	// Helper function for WriteIntersections
+	bool break_segment_gap(
+		int x,
+		int y,
+		std::vector<int>& connections_a,
+		std::vector<int>& connections_b,
+		std::vector<float>& intersections,
+		std::vector<int>& intersectionFlags);
 
 	void render_arrow(int x, int y, int ticks, int dir, std::vector<float>& intersections, std::vector<int>& intersectionFlags, std::vector<int>& polygons) {
 		std::vector<float> positions = { 0.1f, 0.45f, 0.1f, 0.55f, 0.85f, 0.45f, 0.85f, 0.55f,
@@ -425,8 +524,12 @@ private:
 		}
 	}
 
-	int _width, _height;
+	int _width;
+	int _height;
+	int _pillarWidth{0};
 
+	// Because the Panel class integrates so closely with the memory,
+	// its grid can be in the game's format, so long as it provides conversions.
 	std::vector<std::vector<int>> _grid;
 	std::vector<Point> _startpoints;
 	std::vector<Endpoint> _endpoints;
@@ -441,6 +544,7 @@ private:
 	friend class PanelExtractionTests;
 	friend class Generate;
 	friend class PuzzleList;
+	friend class AbstractPuzzleList;
 	friend class Special;
 	friend class MultiGenerate;
 	friend class ArrowWatchdog;
