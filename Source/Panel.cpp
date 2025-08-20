@@ -13,8 +13,8 @@ std::vector<Panel> Panel::generatedPanels;
 std::vector<std::tuple<int, int>> Panel::arrowPuzzles;
 
 template <class T>
-int find(const std::vector<T> &data, T search, size_t startIndex = 0) {
-	for (size_t i=startIndex ; i<data.size(); i++) {
+[[nodiscard]] constexpr int find(const std::vector<T>& data, T search, size_t startIndex = 0) {
+	for (size_t i = startIndex; i < data.size(); ++i) {
 		if (data[i] == search) return static_cast<int>(i);
 	}
 	return -1;
@@ -181,7 +181,7 @@ int find(const std::vector<T> &data, T search, size_t startIndex = 0) {
 
  void Panel::Resize(int width, int height)
 {
-	for (Point &s : _startpoints) {
+	for (Point& s : _startpoints) {
 		if (s.first == _width - 1) {
 			s.first = width - 1;
 		}
@@ -221,7 +221,7 @@ int find(const std::vector<T> &data, T search, size_t startIndex = 0) {
 	// Read the panel's current size from the game and convert the coordinate system
 	_width = 2 * memory->ReadPanelData<int>(id, GRID_SIZE_X) - 1;
 	if (memory->ReadPanelData<int>(id, IS_CYLINDER)) {
-		_width++;
+		++_width;
 		_pillarWidth = _width; // TODO: Refactor static pillarWidth
 	} else {
 		_pillarWidth = 0; // TODO: Refactor static pillarWidth
@@ -238,8 +238,8 @@ int find(const std::vector<T> &data, T search, size_t startIndex = 0) {
 	for (auto&& column : _grid) {
 		column.resize(_height);
 	}
-	for (int x = 0; x < _width; x++) {
-		for (int y = 0; y < _height; y++) {
+	for (int x = 0; x < _width; ++x) {
+		for (int y = 0; y < _height; ++y) {
 			_grid[x][y] = Deco::kEmpty;
 		}
 	}
@@ -351,7 +351,7 @@ int find(const std::vector<T> &data, T search, size_t startIndex = 0) {
 	else if (symmetryData[0] == _width / 2 && intersections[1] == intersections[3]) _symmetry = Symmetry::Vertical;
 	else _symmetry = Symmetry::Horizontal;
 
-	for (int i = 0; i < num_grid_points; i++) {
+	for (auto i = 0u; i < num_grid_points; ++i) {
 		int x = static_cast<int>(std::round((intersections[i * 2] - minx) / unitWidth));
 		int y = _height - 1 - static_cast<int>(std::round((intersections[i * 2 + 1] - miny) / unitHeight));
 		_grid[x][y] = intersectionFlags[i];
@@ -360,8 +360,8 @@ int find(const std::vector<T> &data, T search, size_t startIndex = 0) {
 		}
 	}
 
-	for (int y = 0; y < _height; y++) {
-		for (int x = 0; x < _width; x++) {
+	for (int y = 0; y < _height; ++y) {
+		for (int x = 0; x < _width; ++x) {
 			if (x % 2 == y % 2) continue;
 			_grid[x][y] = OPEN;
 		}
@@ -371,9 +371,9 @@ int find(const std::vector<T> &data, T search, size_t startIndex = 0) {
 	std::vector<int> connections_b = memory->ReadArray<int>(id, DOT_CONNECTION_B, numConnections);
 	//Remove non-existent connections
 	std::vector<std::string> out;
-	for (int i = 0; i < connections_a.size(); i++) {
+	for (std::size_t i = 0; i < connections_a.size(); ++i) {
 		out.push_back("(" + std::to_string(connections_a[i]) + ", " + std::to_string(connections_b[i]) + ")");
-		if (connections_a[i] >= num_grid_points || connections_b[i] >= num_grid_points) continue;
+		if (connections_a[i] >= num_grid_points || connections_b[i] >= num_grid_points) { continue; }
 		int x = static_cast<int>(std::round((intersections[connections_a[i] * 2] - minx) / unitWidth));
 		int y = _height - 1 - static_cast<int>(std::round((intersections[connections_a[i] * 2 + 1] - miny) / unitHeight));
 		int x2 = static_cast<int>(std::round((intersections[connections_b[i] * 2] - minx) / unitWidth));
@@ -382,7 +382,7 @@ int find(const std::vector<T> &data, T search, size_t startIndex = 0) {
 	}
 
 	// Iterate the remaining intersections (endpoints, dots, gaps)
-	for (int i = num_grid_points; i < numIntersections; i++) {
+	for (int i = num_grid_points; i < numIntersections; ++i) {
 		float xd = (intersections[i * 2] - minx) / unitWidth;
 		float yd = (intersections[i * 2 + 1] - miny) / unitHeight;
 		int x = std::clamp((int)std::round(xd), 0, _width - 1);
@@ -393,18 +393,18 @@ int find(const std::vector<T> &data, T search, size_t startIndex = 0) {
 			x = std::clamp((int)std::round((xd + xd2) / 2), 0, _width - 1);
 			y = _height - 1 - std::clamp((int)std::round((yd + yd2) / 2), 0, _height - 1);
 			bool fake = false;
-			for (int j = 0; j < numConnections; j++) {
+			for (int j = 0; j < numConnections; ++j) {
 				if (connections_a[j] == i && connections_b[j] == i + 1 ||
 					connections_a[j] == i + 1 && connections_b[j] == i) {
 					//Fake symmetry wall
 					fake = true;
 					_grid[x][y] = 0;
-					i++;
+					++i;
 					break;
 				}
 			}
 			if (fake) continue;
-			i++;
+			++i;
 		}
 		if (intersectionFlags[i] & IntersectionFlags::ENDPOINT) {
 			for (int j = 0; j < numConnections; j++) {
@@ -464,7 +464,7 @@ int find(const std::vector<T> &data, T search, size_t startIndex = 0) {
 	_style &= ~HAS_DOTS;
 
 	for (int y = _height - 1; y >= 0; y -= 2) {
-		for (int x = 0; x <_width; x += 2) {
+		for (int x = 0; x < _width; x += 2) {
 			intersections.push_back(static_cast<float>(minx + x * unitWidth));
 			intersections.push_back(static_cast<float>(miny + (_height - 1 - y) * unitHeight));
 			if (_grid[x][y] & IntersectionFlags::NO_POINT) intersectionFlags.push_back(_grid[x][y]);
@@ -495,7 +495,7 @@ int find(const std::vector<T> &data, T search, size_t startIndex = 0) {
 	}
 
 	std::vector<std::string> out;
-	for (int i = 0; i < connections_a.size(); i++) {
+	for (int i = 0; i < connections_a.size(); ++i) {
 		out.push_back(std::to_string(connections_a[i]) + " -> " + std::to_string(connections_b[i]));
 	}
 
@@ -503,7 +503,7 @@ int find(const std::vector<T> &data, T search, size_t startIndex = 0) {
 		//Rearrange exits to be in symmetric pairs
 		for (int i = 0; i < _endpoints.size(); i += 2) {
 			Point sp = get_sym_point({_endpoints[i].GetX(), _endpoints[i].GetY()});
-			for (int j = i + 1; j < _endpoints.size(); j++) {
+			for (int j = i + 1; j < _endpoints.size(); ++j) {
 				if (_endpoints[j].GetX() == sp.first && _endpoints[j].GetY() == sp.second) {
 					std::swap(_endpoints[i + 1], _endpoints[j]);
 					break;
@@ -514,7 +514,7 @@ int find(const std::vector<T> &data, T search, size_t startIndex = 0) {
 
 	double endDist = _pillarWidth == 0 ? 0.05 : 0.03;
 
-	for (int i = 0; i < _endpoints.size(); i++) {
+	for (int i = 0; i < _endpoints.size(); ++i) {
 		Endpoint endpoint = _endpoints[i];
 		int x = endpoint.GetX(); int y = endpoint.GetY();
 		if (x % 2 || y % 2) {
@@ -544,7 +544,7 @@ int find(const std::vector<T> &data, T search, size_t startIndex = 0) {
 		intersectionFlags.push_back(endpoint.GetFlags());
 		if (_symmetry) {
 			Point sp = get_sym_point({endpoint.GetX(), endpoint.GetY()});
-			for (int j = 0; j < _endpoints.size(); j++) {
+			for (int j = 0; j < _endpoints.size(); ++j) {
 				if (_endpoints[j].GetX() == sp.first && _endpoints[j].GetY() == sp.second) {
 					symmetryData.push_back(get_num_grid_points() + j);
 					break;
@@ -555,8 +555,8 @@ int find(const std::vector<T> &data, T search, size_t startIndex = 0) {
 	}
 
 	// Dots/Gaps
-	for (int y = _height - 1; y >= 0; y--) {
-		for (int x = 0; x < _width; x++) {
+	for (int y = _height - 1; y >= 0; --y) {
+		for (int x = 0; x < _width; ++x) {
 			if (x % 2 == y % 2) continue;
 			if (_grid[x][y] == 0 || _grid[x][y] == OPEN) continue;
 			if (_grid[x][y] & IntersectionFlags::DOT) {
@@ -640,7 +640,7 @@ int find(const std::vector<T> &data, T search, size_t startIndex = 0) {
 	std::vector<int> decorations = memory->ReadArray<int>(id, DECORATIONS, numDecorations);
 	std::vector<int> decorationFlags = memory->ReadArray<int>(id, DECORATION_FLAGS, numDecorations);
 
-	for (int i=0; i<numDecorations; i++) {
+	for (int i = 0; i < numDecorations; ++i) {
 		auto [x, y] = dloc_to_xy(i);
 		_grid[x][y] = decorations[i];
 	}
@@ -654,8 +654,8 @@ int find(const std::vector<T> &data, T search, size_t startIndex = 0) {
 	bool any = false;
 	bool arrows = false;
 	_style &= ~0x3fc0; //Remove all element flags
-	for (int y=_height-2; y>0; y-=2) {
-		for (int x=1; x<_width; x+=2) {
+	for (int y = _height - 2; y > 0; y -= 2) {
+		for (int x = 1; x < _width; x += 2) {
 			if (colorMode == ColorMode::Treehouse || colorMode == ColorMode::TreehouseAlternate) {
 				if ((_grid[x][y] & 0xf) == Decoration::Color::Green) {
 					_grid[x][y] &= ~0xf; _grid[x][y] |= 6;
@@ -695,7 +695,7 @@ int find(const std::vector<T> &data, T search, size_t startIndex = 0) {
 		}
 	}
 	if (arrows) {
-		for (int i = 0; i < decorations.size(); i++) {
+		for (int i = 0; i < decorations.size(); ++i) {
 			if (decorations[i] == 0) decorations[i] = Decoration::Triangle; //To force it to be unsolvable
 		}
 		memory->WritePanelData<int>(id, OUTER_BACKGROUND_MODE, { 1 });
@@ -741,7 +741,7 @@ int find(const std::vector<T> &data, T search, size_t startIndex = 0) {
 	}
 	if (any || memory->ReadPanelData<int>(id, DECORATIONS)) {
 		memory->WriteArray<int>(id, DECORATIONS, decorations);
-		for (int i = 0; i < decorations.size(); i++) decorations[i] = 0;
+		for (int i = 0; i < decorations.size(); ++i) decorations[i] = 0;
 		memory->WriteArray<int>(id, DECORATION_FLAGS, decorations);
 	}
 	if (arrows) {

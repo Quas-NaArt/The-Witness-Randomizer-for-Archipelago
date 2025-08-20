@@ -46,10 +46,10 @@ template <class T> T pop_random(std::set<T>& set) {
 // Find the first instance of a search sequence within a specified range of the source data.
 template<typename T>
 static int findSequence(const std::vector<T>& sourceData, const std::vector<T>& searchSequence, int startIndex, int endIndex) {
-	for (int sourceIndex = startIndex; sourceIndex < endIndex; sourceIndex++) {
+	for (int sourceIndex = startIndex; sourceIndex < endIndex; ++sourceIndex) {
 		bool foundMatch = true;
 
-		for (int comparisonIndex = 0; comparisonIndex < searchSequence.size(); comparisonIndex++) {
+		for (int comparisonIndex = 0; comparisonIndex < searchSequence.size(); ++comparisonIndex) {
 			if (sourceData[sourceIndex + comparisonIndex] != searchSequence[comparisonIndex])
 			{
 				foundMatch = false;

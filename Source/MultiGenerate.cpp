@@ -21,15 +21,15 @@ bool MultiGenerate::generate(int id, PuzzleSymbols symbols)
 		gen->initPanel(id);
 		int fails = 0;
 		while (!gen->generate_path(symbols)) {
-			if (fails++ > 20)
+			if (fails++ > 20)  // dangerous post-increment. consider with care
 				return false;
 		}
 	}
 
 	std::vector<std::string> solution1; //For debugging only
-	for (int y = 0; y < generators[0]->_panel->height; y++) {
+	for (int y = 0; y < generators[0]->_panel->height; ++y) {
 		std::string row;
-		for (int x = 0; x < generators[0]->_panel->width; x++) {
+		for (int x = 0; x < generators[0]->_panel->width; ++x) {
 			if (generators[0]->get(x, y) == Deco::kPath) {
 				row += "xx";
 			}
@@ -38,9 +38,9 @@ bool MultiGenerate::generate(int id, PuzzleSymbols symbols)
 		solution1.push_back(row);
 	}
 	std::vector<std::string> solution2; //For debugging only
-	for (int y = 0; y < generators[1]->_panel->height; y++) {
+	for (int y = 0; y < generators[1]->_panel->height; ++y) {
 		std::string row;
-		for (int x = 0; x < generators[1]->_panel->width; x++) {
+		for (int x = 0; x < generators[1]->_panel->width; ++x) {
 			if (generators[1]->get(x, y) == Deco::kPath) {
 				row += "xx";
 			}
@@ -49,9 +49,9 @@ bool MultiGenerate::generate(int id, PuzzleSymbols symbols)
 		solution2.push_back(row);
 	}
 	std::vector<std::string> solution3; //For debugging only
-	for (int y = 0; y < generators[2]->_panel->height; y++) {
+	for (int y = 0; y < generators[2]->_panel->height; ++y) {
 		std::string row;
-		for (int x = 0; x < generators[2]->_panel->width; x++) {
+		for (int x = 0; x < generators[2]->_panel->width; ++x) {
 			if (generators[2]->get(x, y) == Deco::kPath) {
 				row += "xx";
 			}
@@ -126,7 +126,7 @@ bool MultiGenerate::place_stones(Deco::Color color, int amount)
 			gen->_openpos.erase(pos);
 			open.erase(pos);
 		}
-		amount--;
+		--amount;
 	}
 	return true;
 }
@@ -187,7 +187,7 @@ bool MultiGenerate::place_stars(Deco::Color color, int amount) {
 			gen->set(pos, Deco::Star(color));
 			gen->_openpos.erase(pos);
 		}
-		amount--;
+		--amount;
 		if (amount == halfPoint) open = generators[0]->_openpos;
 	}
 	return true;
@@ -199,7 +199,7 @@ bool MultiGenerate::can_place_triangle(Point pos) const
 	if (count == 0) {
 		return false;
 	}
-	for (int i = 1; i < generators.size(); i++) {
+	for (int i = 1; i < generators.size(); ++i) {
 		if (generators[i]->count_sides(pos) != count) {
 			return false;
 		}
@@ -228,7 +228,7 @@ bool MultiGenerate::place_triangles(Deco::Color color, int amount)
 			gen->set(pos, Deco::Triangle(color, count));
 			gen->_openpos.erase(pos);
 		}
-		amount--;
+		--amount;
 	}
 	return true;
 }

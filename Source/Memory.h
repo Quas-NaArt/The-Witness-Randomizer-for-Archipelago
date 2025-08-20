@@ -70,7 +70,7 @@ public:
 		std::lock_guard<std::recursive_mutex> lock(mtx);
 
 		if (!retryOnFail) return ReadProcessMemory(_handle, lpBaseAddress, lpBuffer, nSize, nullptr);
-		for (int i = 0; i < 10000; i++) {
+		for (int i = 0; i < 10000; ++i) {
 			if (ReadProcessMemory(_handle, lpBaseAddress, lpBuffer, nSize, nullptr)) {
 				return true;
 			}

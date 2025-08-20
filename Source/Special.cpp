@@ -20,8 +20,8 @@ void Special::generateSpecialSymMaze(std::shared_ptr<Generate> gen, int id) {
 		generator->generateMaze(0x0005C);
 	} while (generator->_path.count(Point(12, 16)));
 	std::shared_ptr<Panel> puzzle = gen->_panel;
-	for (int x = 0; x < puzzle->_width / 2; x++) {
-		for (int y = 0; y < puzzle->_height; y++) {
+	for (int x = 0; x < puzzle->_width / 2; ++x) {
+		for (int y = 0; y < puzzle->_height; ++y) {
 			Point sp = puzzle->get_sym_point({x, y}, Panel::Symmetry::Vertical);
 			if (puzzle->_grid[sp.first][sp.second] & Decoration::Gap) {
 				puzzle->_grid[x][y] = puzzle->_grid[sp.first][sp.second];
@@ -41,8 +41,8 @@ void Special::generateReflectionDotPuzzle(std::shared_ptr<Generate> gen, int id1
 	std::shared_ptr<Panel> puzzle = gen->_panel;
 	std::shared_ptr<Panel> flippedPuzzle = std::make_shared<Panel>(id2);
 	std::vector<Point> dots;
-	for (int x = 0; x < puzzle->_width; x++) {
-		for (int y = 0; y < puzzle->_height; y++) {
+	for (int x = 0; x < puzzle->_width; ++x) {
+		for (int y = 0; y < puzzle->_height; ++y) {
 			Point sp = puzzle->get_sym_point({x, y}, symmetry);
 			if (puzzle->_grid[x][y] | static_cast<int>(Deco::Symbol::Dot)) {
 				auto symbol = Deco::Dot(Deco::Location::Any, Deco::Parity::Any, true);
@@ -96,7 +96,7 @@ void Special::generateReflectionDotPuzzle(std::shared_ptr<Generate> gen, int id1
 	}
 	flippedPuzzle->_endpoints.clear();
 	for (Endpoint p : puzzle->_endpoints) {
-		Point sp = puzzle->get_sym_point({p.GetX(), p.GetY()}, symmetry);
+		Point sp = puzzle->get_sym_point({p.x, p.y}, symmetry);
 		flippedPuzzle->_endpoints.push_back(Endpoint(sp.first, sp.second, gen->_panel->get_sym_dir(p.GetDir(), symmetry),
 			IntersectionFlags::ENDPOINT | (p.GetDir() == Endpoint::Direction::UP || p.GetDir() == Endpoint::Direction::DOWN ? IntersectionFlags::COLUMN : IntersectionFlags::ROW)));
 	}
@@ -1370,13 +1370,13 @@ void Special::generateMountainFloorH() {
 	} while (sym.size() < 4);
 
 	int combine = 0;
-	for (int i = 0; i < 4; i++) {
+	for (int i = 0; i < 4; ++i) {
 		int symbol = generator->get(floorPos[i]);
 
 		correctShapesById[ids[i]] = symbol;
 		//Convert to shape
 		Shape shape;
-		for (int j = 0; j < 16; j++) {
+		for (int j = 0; j < 16; ++j) {
 			if (symbol & (1 << (j + 16))) {
 				shape.emplace((j % 4) * 2 + 1, 8 - ((j / 4) * 2 + 1));
 			}
@@ -1385,13 +1385,14 @@ void Special::generateMountainFloorH() {
 		Shape newShape;
 		int fails = 0;
 		do {
-			if (fails++ == 50) {
+			if (fails++ == 50) { // dangerous post-increment. consider with care
+				// If this loop fails 50 times, call this SAME FUNCTION AGAIN RECURSIVELY???? Sigma pls.
 				generateMountainFloorH();
 				return;
 			}
 			Point shift = Point((Random::rand() % 4) * 2, -(Random::rand() % 4) * 2);
 			newShape.clear();
-			for (Point p : shape) newShape.insert(p + shift);
+			for (Point p : shape) { newShape.insert(p + shift); }
 		} while (!checkShape(newShape, i % 2));
 
 		Generate gen;
@@ -1417,11 +1418,12 @@ void Special::generateMountainFloorH() {
 			if (combine == 1) symbols = PuzzleSymbols(
 				{DecoPair{Deco::Poly(), 3},
 				 DecoPair{Deco::NegaPoly(Cyan), 1}});
-			combine++;
+			++combine;
 		}
 		fails = 0;
 		while (!gen.generate(ids[i], symbols)) {
-			if (fails++ > 50) {
+			if (fails++ > 50) { // dangerous post-increment. consider with care
+				// If this loop fails 50 times, call this SAME FUNCTION AGAIN RECURSIVELY???? Sigma pls.
 				generateMountainFloorH();
 				return;
 			}
@@ -1429,12 +1431,12 @@ void Special::generateMountainFloorH() {
 		//Check that the symbols made it into the shape
 		int count = 0;
 		for (Point p : newShape) {
-			if (gen.get_symbol_type(gen.get(p)) == Decoration::Poly) count++;
-			if (gen.get_symbol_type(gen.get(p)) == Decoration::Eraser) count--;
+			if (gen.get_symbol_type(gen.get(p)) == Decoration::Poly) ++count;
+			if (gen.get_symbol_type(gen.get(p)) == Decoration::Eraser) --count;
 		}
 		if (count != (newShape.size() > 5 ? combine == 2 ? 4 : 2 : 1)) {
-			i--;
-			if (newShape.size() > 5) combine--;
+			--i;
+			if (newShape.size() > 5) --combine;
 			continue;
 		}
 		//Check that the symbols aren't the same
@@ -1445,8 +1447,8 @@ void Special::generateMountainFloorH() {
 			}
 		}
 		if (symbolSet.size() <= 1) {
-			i--;
-			if (newShape.size() > 5) combine--;
+			--i;
+			if (newShape.size() > 5) --combine;
 			continue;
 		}
 		gen.write(ids[i]);
@@ -1464,7 +1466,7 @@ void Special::generatePivotPanel(int id, Point gridSize, const std::vector<DecoP
 	int width = gridSize.first * 2 + 1;
 	int height = gridSize.second * 2 + 1;
 	std::vector<std::shared_ptr<Generate>> gens;
-	for (int i = 0; i < 3; i++) {
+	for (int i = 0; i < 3; ++i) {
 		gens.push_back(std::make_shared<Generate>());
 	}
 	for (std::shared_ptr<Generate> gen : gens) {
@@ -1512,9 +1514,9 @@ void Special::modifyGate(int id)
 	connections_a.push_back(24);
 	connections_b.push_back(numIntersections);
 	std::vector<int> symData;
-	for (int i = 0; i < numIntersections + 1; i++) {
+	for (int i = 0; i < numIntersections + 1; ++i) {
 		bool pushed = false;
-		for (int j = 0; j < numIntersections + 1; j++) {
+		for (int j = 0; j < numIntersections + 1; ++j) {
 			if (std::round(intersections[i * 2] * 30) == std::round(30 - intersections[j * 2] * 30) &&
 				std::round(intersections[i * 2 + 1] * 30) == std::round(30 - intersections[j * 2 + 1] * 30)) {
 				symData.push_back(j);
@@ -1547,13 +1549,13 @@ void Special::addDecoyExits(std::shared_ptr<Generate> gen, int amount) {
 		case 2: pos = Point(Random::rand() % gen->_width, 0); break;
 		case 3: pos = Point(Random::rand() % gen->_width, gen->_height - 1); break;
 		}
-		if (pos.first % 2) pos.first--;
-		if (pos.second % 2) pos.second--;
+		if (pos.first % 2) { --pos.first; }
+		if (pos.second % 2) { --pos.second; }
 		if (gen->_exits.count(pos) || gen->_exits.count(gen->get_sym_point(pos)))
 			continue;
 		gen->_panel->PlaceExit(pos);
 		gen->_exits.insert(pos);
-		amount--;
+		--amount;
 	}
 }
 
@@ -1623,9 +1625,9 @@ void Special::generateSymmetryGate(int id)
 	int numIntersections = memory->ReadPanelData<int>(id, NUM_DOTS);
 	std::vector<float> intersections = memory->ReadArray<float>(id, DOT_POSITIONS, numIntersections * 2);
 	std::vector<int> symData;
-	for (int i = 0; i < numIntersections; i++) {
+	for (int i = 0; i < numIntersections; ++i) {
 		bool pushed = false;
-		for (int j = 0; j < numIntersections; j++) {
+		for (int j = 0; j < numIntersections; ++j) {
 			int precision = 30;
 			if (std::round(intersections[i * 2] * precision) == std::round(precision - intersections[j * 2 + 1] * precision) &&
 				std::round(intersections[i * 2 + 1] * precision) == std::round(intersections[j * 2] * precision)) {
@@ -1845,11 +1847,11 @@ std::vector<int> Special::generatePathByConnections(std::vector<int>& connection
 	std::vector<std::vector<int>> paths;
 	std::vector<std::vector<int>> solutions;
 	std::vector<std::vector<int>> connections(flags.size());
-	for (int i = 0; i < connectionsA.size(); i++) {
+	for (int i = 0; i < connectionsA.size(); ++i) {
 		connections[connectionsA[i]].emplace_back(connectionsB[i]);
 		connections[connectionsB[i]].emplace_back(connectionsA[i]);
 	}
-	for (int i = 0; i < flags.size(); i++) {
+	for (int i = 0; i < flags.size(); ++i) {
 		if ((flags[i] & 0xF) == IntersectionFlags::STARTPOINT && (symmetry.size() == 0 || symmetry[i] > i)) {
 			paths.push_back({ i });
 		}
@@ -1876,7 +1878,7 @@ std::vector<int> Special::generatePathByConnections(std::vector<int>& connection
 				paths.push_back(path);
 			}
 		}
-		pi++;
+		++pi;
 	}
 	if (solutions.size() == 0) return generatePathByConnections(connectionsA, connectionsB, flags, symmetry, shadows);
 	std::vector<int> sol = solutions[Random::rand() % solutions.size()];
@@ -1894,7 +1896,7 @@ bool Special::isAmbiguous(std::vector<int>& path, std::vector<std::vector<int>>&
 	for (std::pair<int, int> p : shadows) {
 		if (path[0] == p.first || path[0] == p.second) isShadowed = true;
 	}
-	for (int i = 1; i < path.size(); i++) {
+	for (int i = 1; i < path.size(); ++i) {
 		std::pair<int, int> p(path[i - 1], path[i]);
 		if (path[i] < path[i - 1]) p = { path[i], path[i - 1] };
 		if (sshadows.find(p) != sshadows.end()) {
@@ -1908,7 +1910,7 @@ bool Special::isAmbiguous(std::vector<int>& path, std::vector<std::vector<int>>&
 		if (sol == path)
 			continue;
 		int countMatch = 0;
-		for (int i = 1; i <= sol.size(); i++) {
+		for (int i = 1; i <= sol.size(); ++i) {
 			if (i == sol.size()) {
 				if (countMatch == spath.size()) 
 					return true;
@@ -1920,7 +1922,7 @@ bool Special::isAmbiguous(std::vector<int>& path, std::vector<std::vector<int>>&
 				continue;
 			if (spath.find(p) == spath.end())
 				break;
-			countMatch++;
+			++countMatch;
 		}
 	}
 	
@@ -1981,9 +1983,9 @@ void Special::createText(int id, std::string text, std::vector<float>& intersect
 	float spacingX = (right - left) / (text.size() * 3 - 1);
 	float spacingY = (top - bottom) / 2;
 
-	for (int i = 0; i < text.size(); i++) {
+	for (int i = 0; i < text.size(); ++i) {
 		char c = std::tolower(text[i]);
-		for (int j = 0; j < coords[c].size(); j++) {
+		for (int j = 0; j < coords[c].size(); ++j) {
 			int n = coords[c][j];
 			intersections.emplace_back((n % 3 + i * 3) * spacingX + left);
 			intersections.emplace_back(1 - ((2 - n / 3) * spacingY + bottom));
@@ -1998,13 +2000,13 @@ void Special::createText(int id, std::string text, std::vector<float>& intersect
 void Special::drawText(int id, std::vector<float>& intersections, std::vector<int>& connectionsA, std::vector<int>& connectionsB, const std::vector<float>& finalLine) {
 
 	std::vector<int> intersectionFlags;
-	for (int i = 0; i < intersections.size() / 2; i++) {
+	for (int i = 0; i < intersections.size() / 2; ++i) {
 		intersectionFlags.emplace_back(0);
 	}
 	intersections.emplace_back(finalLine[0]);
 	intersectionFlags.emplace_back(Deco::kStart);
 
-	for (int i = 1; i < finalLine.size(); i++) {
+	for (int i = 1; i < finalLine.size(); ++i) {
 		intersections.emplace_back(finalLine[i]);
 		if (i % 2 == 0) {
 			intersectionFlags.emplace_back(i == finalLine.size() - 2 ? Deco::kExit : 0);
@@ -2057,7 +2059,7 @@ void Special::drawGoodLuckPanel(int id)
 
 std::string Special::readStringFromPanels(std::vector<int> panelIDs) {
 	std::string output;
-	for (int panelIndex = 0; panelIndex < panelIDs.size(); panelIndex++) {
+	for (int panelIndex = 0; panelIndex < panelIDs.size(); ++panelIndex) {
 		int panelID = panelIDs[panelIndex];
 
 		// First, check to see if this panel has been overridden at all.
@@ -2085,7 +2087,7 @@ std::string Special::readStringFromPanels(std::vector<int> panelIDs) {
 }
 
 void Special::writeStringToPanels(std::string string, std::vector<int> panelIDs) {
-	for (int panelIndex = 0; panelIndex < panelIDs.size(); panelIndex++) {
+	for (int panelIndex = 0; panelIndex < panelIDs.size(); ++panelIndex) {
 		int panelID = panelIDs[panelIndex];
 
 		// When determining whether a panel has been overridden, we check VIDEO_STATUS_COLOR + 12 to see if it has its
@@ -2116,7 +2118,7 @@ void Special::swapStartAndEnd(int id) {
 	int num_intersections = memory->ReadPanelData<int>(id, NUM_DOTS);
 	std::vector<int> intersection_flags = memory->ReadArray<int>(id, DOT_FLAGS, num_intersections);
 
-	for (int i = 0; i < intersection_flags.size(); i++) {
+	for (int i = 0; i < intersection_flags.size(); ++i) {
 		int flag = intersection_flags[i];
 		if ((flag & IntersectionFlags::STARTPOINT) == IntersectionFlags::STARTPOINT) {
 			intersection_flags[i] = (flag & !IntersectionFlags::STARTPOINT) | IntersectionFlags::ENDPOINT;
@@ -2146,7 +2148,7 @@ std::map<int, int> Special::correctShapesById = {};
 int sed = 0;
 //For testing/debugging purposes only
 void Special::test() {
-// 	//Random::seed(sed++);
+// 	//Random::seed(sed++); // cannot convert to pre-increment naively
 // 	Generate generate;
 // 	Memory* memory = Memory::get();
 // 	//auto texloader = TextureLoader::get();

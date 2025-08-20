@@ -85,7 +85,7 @@ Memory::Memory() {
 	EnumProcessModulesEx(_handle, &moduleList[0], static_cast<DWORD>(moduleList.size()), &numModules, 3);
 
 	std::string name(64, '\0');
-	for (DWORD i = 0; i < numModules / sizeof(HMODULE); i++) {
+	for (DWORD i = 0; i < numModules / sizeof(HMODULE); ++i) {
 		int length = GetModuleBaseNameA(_handle, moduleList[i], &name[0], static_cast<DWORD>(name.size()));
 		name.resize(length);
 		if (name == process64) {
@@ -219,7 +219,7 @@ void Memory::findPlayerPosition() {
 
 void Memory::StopDesertLaserPropagation() {
 	executeSigScan({ 0x8B, 0x40, 0x2C, 0xF2, 0x0F, 0x10, 0x43, 0x24, 0x89, 0x44 }, [this](__int64 offset, int index, const std::vector<byte>& data) {
-		for (;; index--) {
+		for (;; --index) { // Will throw when index-3 < 0. At least it won't buffer underrun forever because it's a vector.
 			if (data[index - 3] == 0x48 && data[index - 2] == 0x8B && data[index - 1] == 0xC8 && data[index - 0] == 0xE8) {
 				char asmBuff[] = "\x90\x90\x90\x90\x90";
 				
@@ -366,7 +366,7 @@ void Memory::findImportantFunctionAddresses(){
 	});
 
 	executeSigScan({ 0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x6C, 0x24, 0x10, 0x48, 0x89, 0x74, 0x24, 0x18, 0x57, 0x41, 0x56, 0x41, 0x57, 0x48, 0x83, 0xEC, 0x20, 0x48, 0x8B, 0xEA, 0x4C, 0x8B }, [this](__int64 offset, int index, const std::vector<byte>& data) {
-		for (; index < data.size(); index++) {
+		for (; index < data.size(); ++index) {
 			if (data[index] == 0x48 && data[index + 7] == 0x45 && data[index + 8] == 0x33 && data[index + 9] == 0xC9 && data[index + 10] == 0x41) {
 				index += 3;
 				uint64_t addressOfRelativePointer = _baseAddress + offset + index;
@@ -397,9 +397,9 @@ void Memory::findImportantFunctionAddresses(){
 	});
 
 	executeSigScan({ 0x48, 0x89, 0x5C, 0x24, 0x10, 0x57, 0x48, 0x83, 0xEC, 0x50, 0x48, 0x8B, 0x41 }, [this](__int64 offset, int index, const std::vector<byte>& data) {
-		for (; index < data.size(); index++) {
+		for (; index < data.size(); ++index) {
 			if (data[index - 7] == 0x48 && data[index - 6] == 0x8B && data[index - 5] == 0xD9 && data[index - 4] == 0x48 && data[index - 3] == 0x8B && data[index - 2] == 0x49 && data[index] == 0xE8) {
-				index++;
+				++index;
 				uint64_t addressOfRelativePointer = _baseAddress + offset + index;
 				int relativePointer;
 				ReadAbsolute(reinterpret_cast<LPCVOID>(addressOfRelativePointer), &relativePointer, sizeof(int));
@@ -413,7 +413,7 @@ void Memory::findImportantFunctionAddresses(){
 	});	
 
 	executeSigScan({ 0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x10, 0x57, 0x48, 0x81, 0xEC, 0x10, 0x01, 0x00, 0x00, 0x48, 0x8B }, [this](__int64 offset, int index, const std::vector<byte>& data) {
-		for (; index < data.size(); index++) {
+		for (; index < data.size(); ++index) {
 			if (data[index] == 0xF3 && data[index + 1] == 0x44 && data[index + 2] == 0x0F && data[index + 3] == 0x10 && data[index + 4] == 0x35) {
 				index += 5;
 				uint64_t addressOfRelativePointer = _baseAddress + offset + index;
@@ -426,7 +426,7 @@ void Memory::findImportantFunctionAddresses(){
 			}
 		}
 
-		for (; index < data.size(); index++) {
+		for (; index < data.size(); ++index) {
 			if (data[index - 2] == 0x80 && data[index - 1] == 0x3D && data[index + 4] == 0x00) {
 				uint64_t addressOfRelativePointer = _baseAddress + offset + index;
 				int relativePointer;
@@ -438,7 +438,7 @@ void Memory::findImportantFunctionAddresses(){
 			}
 		}
 
-		for (; index < data.size(); index++) {
+		for (; index < data.size(); ++index) {
 			if (data[index - 4] == 0xF3 && data[index - 3] == 0x0F && data[index - 2] == 0x10 && data[index - 1] == 0x05 && data[index - 9] == 0x0D) {
 				uint64_t addressOfRelativePointer = _baseAddress + offset + index;
 				int relativePointer;
@@ -454,7 +454,7 @@ void Memory::findImportantFunctionAddresses(){
 	});
 
 	executeSigScan({ 0xF3, 0x41, 0x0F, 0x58, 0xF0, 0x41, 0x0F, 0x2E, 0xF0, 0x0F, 0x84, 0x9A }, [this](__int64 offset, int index, const std::vector<byte>& data) {
-		for (; index < data.size(); index++) {
+		for (; index < data.size(); ++index) {
 			if (data[index - 3] == 0x4C && data[index - 2] == 0x8D && data[index - 1] == 0x05) {
 				uint64_t ptypeIssuedSoundRelativePointer = _baseAddress + offset + index;
 				int ptypeIssuedSoundRelative;
@@ -464,7 +464,7 @@ void Memory::findImportantFunctionAddresses(){
 			}
 		}
 
-		for (; index < data.size(); index++) {
+		for (; index < data.size(); ++index) {
 			if (data[index - 3] == 0x49 && data[index - 2] == 0x8B && data[index - 1] == 0xD0) {
 				uint64_t getPortablesOfTypeRelativePointer = _baseAddress + offset + index + 14;
 				int getPortablesOfTypeRelative;
@@ -486,21 +486,21 @@ void Memory::findImportantFunctionAddresses(){
 	executeSigScan({ 0x45, 0x0F, 0x28, 0xC8, 0xF3, 0x44 }, [this](__int64 offset, int index, const std::vector<byte>& data) {
 		cursorSize = _baseAddress + offset + index;
 
-		for (; index < data.size(); index++) {
+		for (; index < data.size(); ++index) {
 			if (data[index - 3] == 0xC7 && data[index - 2] == 0x45 && data[index - 1] == 0x40) {
 				cursorR = _baseAddress + offset + index;
 				break;
 			}
 		}
-		index++;
-		for (; index < data.size(); index++) {
+		++index;
+		for (; index < data.size(); ++index) {
 			if (data[index - 3] == 0xC7 && data[index - 2] == 0x45 && data[index - 1] == 0x44) {
 				cursorG = _baseAddress + offset + index;
 				break;
 			}
 		}
-		index++;
-		for (; index < data.size(); index++) {
+		++index;
+		for (; index < data.size(); ++index) {
 			if (data[index - 3] == 0xC7 && data[index - 2] == 0x45 && data[index - 1] == 0x48) {
 				cursorB = _baseAddress + offset + index;
 				break;
@@ -510,8 +510,8 @@ void Memory::findImportantFunctionAddresses(){
 		return true;
 	});
 
-	executeSigScan ({0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x20, 0x48, 0x89, 0x48, 0x08, 0x55, 0x56, 0x57, 0x41, 0x54}, [this](__int64 offset, int index, const std::vector<byte>& data) {
-		for (; index < data.size(); index++) {
+	executeSigScan({ 0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x20, 0x48, 0x89, 0x48, 0x08, 0x55, 0x56, 0x57, 0x41, 0x54 }, [this](__int64 offset, int index, const std::vector<byte>& data) {
+		for (; index < data.size(); ++index) {
 			if (data[index - 2] == 0x78 && data[index - 1] == 0x10 && data[index] == 0xE8) { // need to find actual function, which I could not get a sigscan to work for, so I did the function right before it
 				uint64_t pointerLocation = _baseAddress + offset + index + 1;
 
@@ -531,7 +531,7 @@ void Memory::findImportantFunctionAddresses(){
 				//This will cause memory leaks because the object is now not deleted. But that's preferrable to the game crashing.
 				//The memory leaks are about on the order of 0.1kB per "Resolving an already solved EP", an action the player shouldn't do too often.
 
-				WriteAbsolute(testInstructionPointer, buf, sizeof(buf) -1); // Write the new relative address into the "movss xmm0 [address]" statement.
+				WriteAbsolute(testInstructionPointer, buf, sizeof(buf) - 1); // Write the new relative address into the "movss xmm0 [address]" statement.
 
 
 				break;
@@ -540,7 +540,7 @@ void Memory::findImportantFunctionAddresses(){
 
 		index++;
 
-		for (; index < data.size(); index++) {
+		for (; index < data.size(); ++index) {
 			if (data[index - 2] == 0x4B && data[index - 1] == 0x30 && data[index] == 0xE8) { // need to find actual function, which I could not get a sigscan to work for, so I did the function right before it
 				uint64_t pointerLocation = _baseAddress + offset + index + 1;
 
@@ -554,7 +554,7 @@ void Memory::findImportantFunctionAddresses(){
 			}
 		}
 
-		for (; index < data.size(); index--) {
+		for (; index < data.size(); --index) {
 			if (data[index] == 0x48 && data[index + 1] == 0x8D && data[index + 2] == 0x0D) { // need to find actual function, which I could not get a sigscan to work for, so I did the function right before it
 				uint64_t pointerLocation = _baseAddress + offset + index + 3;
 
@@ -599,7 +599,7 @@ void Memory::findImportantFunctionAddresses(){
 
 	//open door
 	executeSigScan({ 0x0F, 0x57, 0xC9, 0x48, 0x8B, 0xCB, 0x48, 0x83, 0xC4, 0x20 }, [this](__int64 offset, int index, const std::vector<byte>& data) {	
-		for (; index < data.size(); index++) {
+		for (; index < data.size(); ++index) {
 			if (data[index - 2] == 0xF3 && data[index - 1] == 0x0F) {
 				this->openDoorFunction = _baseAddress + offset + index - 2;
 				break;
@@ -611,7 +611,7 @@ void Memory::findImportantFunctionAddresses(){
 
 	//close door
 	executeSigScan({ 0x8B, 0x7B, 0x30, 0x4D, 0x8B, 0x63, 0x38, 0x49, 0x8B, 0xE3, 0x41, 0x5F, 0x41, 0x5E, 0x5D, 0xC3 }, [this](__int64 offset, int index, const std::vector<byte>& data) {
-		for (; index < data.size(); index++) {
+		for (; index < data.size(); ++index) {
 			if (data[index - 2] == 0x40 && data[index - 1] == 0x53 && data[index] == 0x48) { // The open door function comes after.
 				this->closeDoorFunction = _baseAddress + offset + index - 2;
 				break;
@@ -649,9 +649,13 @@ void Memory::findImportantFunctionAddresses(){
 	});
 
 	//find a spot to inject payload
-	executeSigScan({0x0F, 0x5B, 0xC0, 0x0F, 0x2E, 0xC1, 0x74}, [this](__int64 offset, int index, const std::vector<byte>& data) {
-		for (; index < data.size(); index++) {
-			if (data[index - 5] == 0xE8 && data[index] == 0xE8 && data[index + 5] == 0xE8 && data[index + 5] == 0xE8 && data[index + 10] == 0xE8) {
+	executeSigScan({ 0x0F, 0x5B, 0xC0, 0x0F, 0x2E, 0xC1, 0x74 }, [this](__int64 offset, int index, const std::vector<byte>& data) {
+		//[[assume(index >= 5)]]
+		for (; index < data.size(); ++index) {
+			if (data[index - 5] == 0xE8 &&
+				data[index] == 0xE8 &&
+				data[index + 5] == 0xE8 &&
+				data[index + 10] == 0xE8) {
 				this->gameLoop3CallsInARow = _baseAddress + offset + index;
 				break;
 			}
@@ -692,7 +696,7 @@ void Memory::findImportantFunctionAddresses(){
 	executeSigScan({ 0x40, 0x53, 0x48, 0x83, 0xEC, 0x20, 0x83, 0x3D }, [this](__int64 offset, int index, const std::vector<byte>& data) {
 		this->displayHudFunction = _baseAddress + offset + index;
 
-		for (; index < data.size(); index++) {
+		for (; index < data.size(); ++index) {
 			if (data[index - 2] == 0xF3 && data[index - 1] == 0x0F) { // find the movss statement
 				this->hudTimePointer = _baseAddress + offset + index + 2;
 
@@ -739,7 +743,7 @@ void Memory::findImportantFunctionAddresses(){
 		}
 
 		// Assign values relative to the base function address.
-		for (int colorIndex = 0; colorIndex < 3; colorIndex++)
+		for (int colorIndex = 0; colorIndex < 3; ++colorIndex)
 		{
 			hudMessageColorAddresses[colorIndex] = functionAddress + foundIndices[colorIndex];
 		}
@@ -749,10 +753,10 @@ void Memory::findImportantFunctionAddresses(){
 
 	//Boat speed
 	//Find Entity_Boat::set_speed
-	executeSigScan({0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0x48, 0x83, 0xEC, 0x40, 0x0F, 0x29, 0x74, 0x24, 0x30, 0x8B, 0xFA }, [this](__int64 offset, int index, const std::vector<byte>& data) {
+	executeSigScan({ 0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0x48, 0x83, 0xEC, 0x40, 0x0F, 0x29, 0x74, 0x24, 0x30, 0x8B, 0xFA }, [this](__int64 offset, int index, const std::vector<byte>& data) {
 		this->setBoatSpeed = _baseAddress + offset + index;
 
-		for (; index < data.size(); index++) { // We now need to look for "cmp edi 04", "cmp edi 03", "cmp edi 02", and "cmp edi 01"
+		for (; index < data.size(); ++index) { // We now need to look for "cmp edi 04", "cmp edi 03", "cmp edi 02", and "cmp edi 01"
 			  
 			if (data[index - 2] == 0x83 && data[index - 1] == 0xFF && data[index] == 0x04) { // find cmp edi 04 (Will only comment the rest once as it's the same for the other 3)
 				this->boatSpeed4 = _baseAddress + offset + index + 7; // movss xmm0 ->register<- is 7 bytes later
@@ -861,7 +865,7 @@ void Memory::findImportantFunctionAddresses(){
 		int index2 = index;
 
 		//Boat max turn speed
-		for (; index < data.size(); index++) { // Find next mov instruction
+		for (; index < data.size(); ++index) { // Find next mov instruction
 			if (data[index - 6] == 0xC7 && data[index - 5] == 0x83) {
 				float newSpeed = 3.0f; // 1.0f originally
 
@@ -872,7 +876,7 @@ void Memory::findImportantFunctionAddresses(){
 		}
 
 		//Boat turn accell
-		for (; index2 >= 4; index2--) { // Find next mov instruction
+		for (; index2 >= 4; --index2) { // Find next mov instruction
 			if (data[index2 - 4] == 0xf3 && data[index2 - 3] == 0x0f && data[index2 - 2] == 0x59) {
 				this->boatTurnAccel = _baseAddress + index2;
 
@@ -915,7 +919,7 @@ void Memory::findImportantFunctionAddresses(){
 	});
 
 	executeSigScan({ 0x48, 0x8B, 0x51, 0x18, 0x2B, 0x42, 0x08, 0x78, 0x37 }, [this](__int64 offset, int index, const std::vector<byte>& data) {
-		for (; index < data.size(); index--) {
+		for (; index < data.size(); --index) {
 			if (data[index] == 0x40 && data[index + 1] == 0x53 && data[index + 2] == 0x48) { // need to find function start (backwards)
 				this->completeEPFunction = _baseAddress + offset + index;
 				break;
@@ -926,7 +930,7 @@ void Memory::findImportantFunctionAddresses(){
 	});
 
 	executeSigScan({ 0x66, 0x0F, 0x6E, 0xD9, 0x0F, 0x5B, 0xDB }, [this](__int64 offset, int index, const std::vector<byte>& data) {
-		for (; index < data.size(); index++) {
+		for (; index < data.size(); ++index) {
 			if (data[index] == 0x48 && data[index - 5] == 0xE8 && data[index - 10] == 0xE8 && data[index + 7] == 0xE8 && (data[index + 12] == 0x39 || data[index + 12] == 0x83)) {
 				this->GESTURE_MANAGER = _baseAddress + offset + index + 3;
 				
@@ -1307,7 +1311,7 @@ void Memory::DisplayHudMessage(std::string message, std::array<float, 3> rgbColo
 
 	// Write the message's color values to the addresses of the constants we previously found.
 	const SIZE_T colorSize = sizeof(float);
-	for (int colorIndex = 0; colorIndex < 3; colorIndex++)
+	for (int colorIndex = 0; colorIndex < 3; ++colorIndex)
 	{
 		void* writeAddress = reinterpret_cast<void*>(hudMessageColorAddresses[colorIndex]);
 		void* readAddress = reinterpret_cast<void*>(&rgbColor[colorIndex]);

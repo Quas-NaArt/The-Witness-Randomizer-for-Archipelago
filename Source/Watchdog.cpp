@@ -71,8 +71,8 @@ void ArrowWatchdog::action() {
 	if (length == tracedLength) return;
 	initPath();
 	if (complete) {
-		for (int x = 1; x < width; x++) {
-			for (int y = 1; y < height; y++) {
+		for (int x = 1; x < width; ++x) {
+			for (int y = 1; y < height; ++y) {
 				if (!checkArrow(x, y)) {
 					//OutputDebugStringW(L"No");
 					WritePanelData<int>(id, STYLE_FLAGS, { style | Panel::Style::HAS_TRIANGLES });
@@ -92,7 +92,7 @@ void ArrowWatchdog::initPath()
 	if (!tracedptr) return;
 	std::vector<SolutionPoint> traced = ReadArray<SolutionPoint>(id, TRACED_EDGE_DATA, numTraced);
 	if (style & Panel::Style::SYMMETRICAL) {
-		for (int i = 0; i < numTraced; i++) {
+		for (int i = 0; i < numTraced; ++i) {
 			SolutionPoint sp;
 			sp.pointA = symmetryData[traced[i].pointA];
 			sp.pointB = symmetryData[traced[i].pointB];
@@ -144,10 +144,10 @@ bool ArrowWatchdog::checkArrow(int x, int y)
 	int symbol = grid[x][y];
 	if ((symbol & 0x700) == Decoration::Triangle && (symbol & 0xf0000) != 0) {
 		int count = 0;
-		if (grid[x - 1][y] == Deco::kPath) count++;
-		if (grid[x + 1][y] == Deco::kPath) count++;
-		if (grid[x][y - 1] == Deco::kPath) count++;
-		if (grid[x][y + 1] == Deco::kPath) count++;
+		if (grid[x - 1][y] == Deco::kPath) { ++count; }
+		if (grid[x + 1][y] == Deco::kPath) { ++count; }
+		if (grid[x][y - 1] == Deco::kPath) { ++count; }
+		if (grid[x][y + 1] == Deco::kPath) { ++count; }
 		return count == (symbol >> 16);
 	}
 	if ((symbol & 0x700) != Decoration::Arrow)
@@ -171,10 +171,10 @@ bool ArrowWatchdog::checkArrowPillar(int x, int y)
 	int symbol = grid[x][y];
 	if ((symbol & 0x700) == Decoration::Triangle && (symbol & 0xf0000) != 0) {
 		int count = 0;
-		if (grid[x - 1][y] == Deco::kPath) {count++;}
-		if (grid[x + 1][y] == Deco::kPath) {count++;}
-		if (grid[x][y - 1] == Deco::kPath) {count++;}
-		if (grid[x][y + 1] == Deco::kPath) {count++;}
+		if (grid[x - 1][y] == Deco::kPath) { ++count; }
+		if (grid[x + 1][y] == Deco::kPath) { ++count; }
+		if (grid[x][y - 1] == Deco::kPath) { ++count; }
+		if (grid[x][y + 1] == Deco::kPath) { ++count; }
 		return count == (symbol >> 16);
 	}
 	if ((symbol & 0x700) != Decoration::Arrow)
@@ -263,7 +263,7 @@ void JungleWatchdog::action()
 	for (const SolutionPoint& sPoint : traced) {
 		if ((sizes[sPoint.pointA] & IntersectionFlags::DOT) == 0) continue;
 		if (sizes[sPoint.pointA] & (0x1000 << (state ? correctSeq1[seqIndex] : correctSeq2[seqIndex])))
-			seqIndex++;
+			++seqIndex;
 		else return;
 		if (seqIndex >= 1) {
 			WritePanelData<long>(id, DOT_SEQUENCE, { state ? ptr1 : ptr2 } );

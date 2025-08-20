@@ -24,7 +24,9 @@ std::vector<int> copyWithoutElements(const std::vector<int>& input, const std::v
 void Randomizer::GenerateNormal(HWND loadingHandle) {
 	std::unique_ptr<PuzzleList> puzzles = std::make_unique<PuzzleList>(loadingHandle, seed, seedIsRNG, colorblind);
 	puzzles->GenerateAllN();
-	if (doubleMode) ShufflePanels(false);
+	if (doubleMode) {
+		ShufflePanels(false);
+}
 }
 
 void Randomizer::GenerateHard(HWND loadingHandle) {
@@ -46,8 +48,8 @@ void Randomizer::GenerateHard(HWND loadingHandle) {
 }
 
 template <class T>
-int find(const std::vector<T> &data, T search, size_t startIndex = 0) {
-	for (size_t i = startIndex; i<data.size(); i++) {
+int find(const std::vector<T>& data, T search, size_t startIndex = 0) {
+	for (size_t i = startIndex; i < data.size(); ++i) {
 		if (data[i] == search) return static_cast<int>(i);
 	}
 	std::cout << "Couldn't find " << search << " in data!" << std::endl;
@@ -155,7 +157,7 @@ void Randomizer::RandomizeRange(std::vector<int> panels, int flags, size_t start
 	if (panels.size() == 0) return;
 	if (startIndex >= endIndex) return;
 	if (endIndex >= panels.size()) endIndex = static_cast<int>(panels.size());
-	for (size_t i = endIndex - 1; i > startIndex; i--) {
+	for (size_t i = endIndex - 1; i > startIndex; --i) {
 		const int target = (Random::rand() % (static_cast<int>(i) - static_cast<int>(startIndex) + 1)) + static_cast<int>(startIndex);
 		if (i != target) {
 			SwapPanels(panels[i], panels[target], flags);
@@ -168,15 +170,19 @@ void Randomizer::RandomizeRange(std::vector<int> panels, int flags, size_t start
 void Randomizer::RandomizeAudiologs()
 {
 	std::vector<int> audiologs = {
-		0x3C0F7, 0x3C0FD, 0x32A00, 0x3C0FE, 0x338B0, 0x338B7, 0x338AD,
-		0x338A5, 0x338AE, 0x338AF, 0x338A7, 0x338A3, 0x338A4, 0x3C108,
-		0x338EF, 0x336E5, 0x338A6, 0x3C100, 0x3C0F4, 0x3C102, 0x3C10D,
-		0x3C10E, 0x3C10B, 0x0074F, 0x012C7, 0x329FF, 0x3C106, 0x33AFF,
-		0x011F9, 0x00763, 0x32A08, 0x3C101, 0x3C0FF, 0x3C103, 0x00A0F,
-		0x339A9, 0x015C0, 0x33B36, 0x3C10C, 0x32A0E, 0x329FE, 0x32A07,
-		0x00761, 0x3C109, 0x33B37, 0x3C107, 0x3C0F3, 0x015B7, 0x3C10A,
-		0x32A0A, 0x015C1, 0x3C12A, 0x3C104, 0x3C105, 0x339A8, 0x0050A,
-		0x338BD, 0x3C135, 0x338C9, 0x338D7, 0x338C1, 0x338CA
+		0x3C0F7, 0x3C0FD, 0x32A00, 0x3C0FE, 0x338B0,
+		0x338B7, 0x338AD, 0x338A5, 0x338AE, 0x338AF,
+		0x338A7, 0x338A3, 0x338A4, 0x3C108, 0x338EF,
+		0x336E5, 0x338A6, 0x3C100, 0x3C0F4, 0x3C102,
+		0x3C10D, 0x3C10E, 0x3C10B, 0x0074F, 0x012C7,
+		0x329FF, 0x3C106, 0x33AFF, 0x011F9, 0x00763,
+		0x32A08, 0x3C101, 0x3C0FF, 0x3C103, 0x00A0F,
+		0x339A9, 0x015C0, 0x33B36, 0x3C10C, 0x32A0E,
+		0x329FE, 0x32A07, 0x00761, 0x3C109, 0x33B37,
+		0x3C107, 0x3C0F3, 0x015B7, 0x3C10A, 0x32A0A,
+		0x015C1, 0x3C12A, 0x3C104, 0x3C105, 0x339A8,
+		0x0050A, 0x338BD, 0x3C135, 0x338C9, 0x338D7,
+		0x338C1, 0x338CA
 	};
 	Randomizer::RandomizeRange(audiologs, SWAP::AUDIO_NAMES, 0, audiologs.size());
 }
@@ -253,7 +259,7 @@ void Randomizer::SwapPanels(int panel1, int panel2, int flags) {
 	}
 
 	Memory* memory = Memory::get();
-	for (auto const&[offset, size] : offsets) {
+	for (auto const& [offset, size] : offsets) {
 		std::vector<byte> panel1data = memory->ReadPanelData<byte>(panel1, offset, size);
 		std::vector<byte> panel2data = memory->ReadPanelData<byte>(panel2, offset, size);
 		memory->WritePanelData<byte>(panel2, offset, panel1data);
@@ -276,7 +282,7 @@ void Randomizer::ReassignTargets(const std::vector<int>& panels, const std::vect
 		}
 	}
 
-	for (size_t i = 0; i < order.size() - 1; i++) {
+	for (size_t i = 0; i < order.size() - 1; ++i) {
 		// Set the target of order[i] to order[i+1], using the "real" target as determined above.
 		const int panelTarget = targets[order[i + 1]];
 		memory->WritePanelData<int>(panels[order[i]], TARGET, { panelTarget });
@@ -300,7 +306,7 @@ void Randomizer::ShuffleRange(std::vector<int>& order, size_t startIndex, size_t
 	if (order.size() == 0) return;
 	if (startIndex >= endIndex) return;
 	if (endIndex >= order.size()) endIndex = static_cast<int>(order.size());
-	for (size_t i = endIndex - 1; i > startIndex; i--) {
+	for (size_t i = endIndex - 1; i > startIndex; --i) {
 		const int target = (Random::rand() % (static_cast<int>(i) - static_cast<int>(startIndex) + 1)) + static_cast<int>(startIndex); 
 		std::swap(order[i], order[target]);
 	}

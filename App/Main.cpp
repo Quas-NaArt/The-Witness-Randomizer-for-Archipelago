@@ -120,7 +120,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 		case IDC_TEST:
 			generator->resetConfig();
 			generator->seed(static_cast<unsigned int>(time(NULL)));
-			//generator->seed(ctr++);
+			//generator->seed(ctr++); // dangerous post-increment. consider with care
 			//generator->seed(1);
 			specialCase->test();
 			break;
@@ -521,7 +521,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 		};
 		TCHAR option[24];
 		memset(&option, 0, sizeof(option));
-		for (int i = 0; i < NUM_ELEMS; i++)
+		for (int i = 0; i < NUM_ELEMS; ++i)
 		{
 			wcscpy_s(option, sizeof(option) / sizeof(TCHAR), (TCHAR*)elems[i]);
 			SendMessage(hwndElem, (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)option);
@@ -539,7 +539,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 			TEXT("Cyan"), TEXT("Blue"), TEXT("Purple"), TEXT("Magenta"), TEXT("None"), TEXT("???")
 		};
 		memset(&option, 0, sizeof(option));
-		for (int i = 0; i < NUM_COLORS; i++)
+		for (int i = 0; i < NUM_COLORS; ++i)
 		{
 			wcscpy_s(option, sizeof(option) / sizeof(TCHAR), (TCHAR*)colors[i]);
 			SendMessage(hwndColor, (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)option);
@@ -560,8 +560,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 			WS_TABSTOP | WS_VISIBLE | WS_CHILD | SS_LEFT,
 			50, 350, 50, 16, hwnd, NULL, hInstance, NULL);
 
-		for (int x = 0; x < 4; x++) {
-			for (int y = 0; y < 4; y++) {
+		for (int x = 0; x < 4; ++x) {
+			for (int y = 0; y < 4; ++y) {
 				CreateWindow(L"BUTTON", L"",
 					WS_VISIBLE | WS_CHILD | BS_CHECKBOX,
 					50 + x * 15, 380 + y * 15, 12, 12, hwnd, (HMENU)shapePos[x + y * 4], hInstance, NULL);
@@ -604,8 +604,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 			WS_TABSTOP | WS_VISIBLE | WS_CHILD | SS_LEFT,
 			50, 560, 90, 16, hwnd, NULL, hInstance, NULL);
 
-		for (int x = 0; x < 3; x++) {
-			for (int y = 0; y < 3; y++) {
+		for (int x = 0; x < 3; ++x) {
+			for (int y = 0; y < 3; ++y) {
 				if (x == 1 && y == 1) continue;
 				CreateWindow(L"BUTTON", L"",
 					WS_VISIBLE | WS_CHILD | BS_CHECKBOX,

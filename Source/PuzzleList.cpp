@@ -1291,7 +1291,7 @@ void PuzzleList::GenerateTownN()
 	// Soundproof Room
 	std::vector<int> allPitches = {DOT_SMALL, DOT_SMALL, DOT_MEDIUM, DOT_MEDIUM, DOT_LARGE, DOT_LARGE};
 	std::vector<int> pitches;
-	for (int i = 0; i < 4; i++)
+	for (int i = 0; i < 4; ++i)
 		pitches.push_back(Utilities::pop_random(allPitches));
 	specialCase->generateSoundDotPuzzle(0x034E3, {4, 4}, pitches, false);
 	generator->resetConfig();
@@ -2153,8 +2153,8 @@ void PuzzleList::GenerateTutorialH()
 					  {kExit, 1},
 					  {Dot(), 25}});
 		// Place both a start and a dot at a diagonal grid of nodes.
-		for (int x = 0; x <= gridx; x++)
-			for (int y = 0; y <= gridy; y++)
+		for (int x = 0; x <= gridx; ++x)
+			for (int y = 0; y <= gridy; ++y)
 				if ((x + y) % 2 != generator->_parity)
 					generator->set({x * 2, y * 2}, kStart | Dot()); // Special function Overlay(symbolA, symbolB)? Rely on starts being processed separately?
 		generator->write(0x0005D);
@@ -2169,8 +2169,8 @@ void PuzzleList::GenerateTutorialH()
 					{kExit, 1},
 					{Dot(), 36}});
 		// Place both a start and a dot at a diagonal grid of nodes.
-		for (int x = 0; x <= gridx; x++)
-			for (int y = 0; y <= gridy; y++)
+		for (int x = 0; x <= gridx; ++x)
+			for (int y = 0; y <= gridy; ++y)
 				if ((x + y) % 2 != generator->_parity)
 					generator->set({x * 2, y * 2}, kStart | Dot()); // Special function Overlay(symbolA, symbolB)? Rely on starts being processed separately?
 		generator->write(0x0005E);
@@ -2420,13 +2420,13 @@ void PuzzleList::GenerateSymmetryH()
 	std::vector<Panel::Symmetry> sym1 = {Panel::Symmetry::Vertical, Panel::Symmetry::Horizontal, Panel::Symmetry::Rotational, Panel::Symmetry::ParallelH, Panel::Symmetry::ParallelV};
 	std::vector<Panel::Symmetry> sym2 = {Panel::Symmetry::ParallelHFlip, Panel::Symmetry::ParallelVFlip, Random::rand() % 2 == 0 ? Panel::Symmetry::ParallelV : Panel::Symmetry::ParallelH};
 	Panel::Symmetry lastChoice = Panel::Symmetry::None;
-	for (int i = 0; i < ids.size(); i++)
+	for (int i = 0; i < ids.size(); ++i)
 	{
 		// For the first 4 panels, pick from the easy list, no repeats.
 		// For the remaining 2 panels, pick from the weird list, no repeats.
 		Panel::Symmetry choice = (i < 4 ? Utilities::pop_random(sym1) : Utilities::pop_random(sym2));
 		if (choice == lastChoice) {
-			i--;
+			--i;
 			continue;
 		}
 		lastChoice = choice;
@@ -3606,7 +3606,7 @@ void PuzzleList::GenerateTownH() {
 	// Soundproof Room
 	std::vector<int> allPitches = {DOT_SMALL, DOT_SMALL, DOT_MEDIUM, DOT_MEDIUM, DOT_LARGE, DOT_LARGE};
 	std::vector<int> pitches;
-	for (int i = 0; i < 4; i++)
+	for (int i = 0; i < 4; ++i)
 		pitches.push_back(Utilities::pop_random(allPitches));
 	specialCase->generateSoundDotPuzzle(0x034E3, {4, 4}, pitches, false);
 	generator->resetConfig();
