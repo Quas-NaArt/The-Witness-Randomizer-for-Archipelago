@@ -8,7 +8,7 @@ class Memory;
 class ASMPayloadManager
 {
 private:
-	ASMPayloadManager();
+	ASMPayloadManager() = default;
 
 	void findGameloopFunction();
 	void setupPayload();

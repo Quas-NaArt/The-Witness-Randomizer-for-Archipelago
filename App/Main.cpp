@@ -119,7 +119,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 		//Test button  - general testing (debug mode only)
 		case IDC_TEST:
 			generator->resetConfig();
-			generator->seed(static_cast<unsigned int>(time(NULL)));
+			generator->seed(static_cast<unsigned int>(time(nullptr)));
 			//generator->seed(ctr++); // dangerous post-increment. consider with care
 			//generator->seed(1);
 			specialCase->test();
@@ -147,7 +147,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 			Memory* memory = Memory::get();
 			bool rerandomize = false;
 			if (memory->ReadPanelData<int>(0x00064, NUM_DOTS) > 5) {
-				if (MessageBox(hwnd, L"Game is currently randomized. Are you sure you want to randomize again? (Can cause glitches)", NULL, MB_YESNO) == IDYES) {
+				if (MessageBox(hwnd, L"Game is currently randomized. Are you sure you want to randomize again? (Can cause glitches)", nullptr, MB_YESNO) == IDYES) {
 					rerandomize = true;
 					seedIsRNG = false;
 				}
@@ -161,13 +161,13 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 			if (seed <= 0 || seed > 9999999) {
 				if (text[0] == 0) {
 					//If no seed is entered, pick random seed
-					Random::seed(static_cast<int>(time(NULL)));
+					Random::seed(static_cast<int>(time(nullptr)));
 					seed = Random::rand() % 9999999 + 1;
 					Random::seed(seed);
 					randomizer->seedIsRNG = true;
 				}
 				else {
-					MessageBox(hwnd, L"Please enter a number between 1 and 9999999.", NULL, MB_OK);
+					MessageBox(hwnd, L"Please enter a number between 1 and 9999999.", nullptr, MB_OK);
 					break;
 				}
 			}
@@ -183,14 +183,14 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 			int lastSeed = memory->ReadPanelData<int>(0x00064, BACKGROUND_REGION_COLOR + 12);
 			if (lastSeed > 0 && !rerandomize && !DEBUG) {
 				if (seed != lastSeed && !randomizer->seedIsRNG) {
-					if (MessageBox(hwnd, (L"This save file was previously randomized with seed " + std::to_wstring(lastSeed) + L". Are you sure you want to use seed " + std::to_wstring(seed) + L" instead?").c_str(), NULL, MB_YESNO) == IDNO) {
+					if (MessageBox(hwnd, (L"This save file was previously randomized with seed " + std::to_wstring(lastSeed) + L". Are you sure you want to use seed " + std::to_wstring(seed) + L" instead?").c_str(), nullptr, MB_YESNO) == IDNO) {
 						SetWindowText(hwndSeed, std::to_wstring(lastSeed).c_str());
 						break;
 					}
 				}
 				lastHard = (memory->ReadPanelData<int>(0x00182, BACKGROUND_REGION_COLOR + 12) > 0);
 				if (!lastHard && hard) {
-					if (MessageBox(hwnd, L"This save file was previously randomized on Normal. Are you sure you want to switch to Expert?", NULL, MB_YESNO) == IDNO) {
+					if (MessageBox(hwnd, L"This save file was previously randomized on Normal. Are you sure you want to switch to Expert?", nullptr, MB_YESNO) == IDNO) {
 						SendMessage(hwndNormal, BM_SETCHECK, BST_CHECKED, 1);
 						SendMessage(hwndExpert, BM_SETCHECK, BST_UNCHECKED, 1);
 						hard = false;
@@ -198,7 +198,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 					}
 				}
 				if (lastHard && !hard) {
-					if (MessageBox(hwnd, L"This save file was previously randomized on Expert. Are you sure you want to switch to Normal?", NULL, MB_YESNO) == IDNO) {
+					if (MessageBox(hwnd, L"This save file was previously randomized on Expert. Are you sure you want to switch to Normal?", nullptr, MB_YESNO) == IDNO) {
 						SendMessage(hwndExpert, BM_SETCHECK, BST_CHECKED, 1);
 						SendMessage(hwndNormal, BM_SETCHECK, BST_UNCHECKED, 1);
 						hard = true;
@@ -207,14 +207,14 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 				}
 				bool lastDouble = (memory->ReadPanelData<int>(0x0A3B2, BACKGROUND_REGION_COLOR + 12) > 0);
 				if (lastDouble && !doubleMode) {
-					if (MessageBox(hwnd, L"This save file was previously randomized on Double Mode. Are you sure you want to disable it?", NULL, MB_YESNO) == IDNO) {
+					if (MessageBox(hwnd, L"This save file was previously randomized on Double Mode. Are you sure you want to disable it?", nullptr, MB_YESNO) == IDNO) {
 						SendMessage(hwndDoubleMode, BM_SETCHECK, BST_CHECKED, 1);
 						doubleMode = true;
 						break;
 					}
 				}
 				if (!lastDouble && doubleMode) {
-					if (MessageBox(hwnd, L"This save file was not previously randomized on Double Mode. Are you sure you want to enable it?", NULL, MB_YESNO) == IDNO) {
+					if (MessageBox(hwnd, L"This save file was not previously randomized on Double Mode. Are you sure you want to enable it?", nullptr, MB_YESNO) == IDNO) {
 						SendMessage(hwndDoubleMode, BM_SETCHECK, BST_UNCHECKED, 1);
 						doubleMode = false;
 						break;
@@ -224,7 +224,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 			//If the save hasn't been randomized before, make sure it is a fresh, unplayed save file
 			else if (Special::hasBeenPlayed() && !rerandomize && !DEBUG) {
-				if (MessageBox(hwnd, L"Warning: It is recommended that you start a new game for the randomizer, to prevent corruption of your save file. Randomize on the current save file anyway?", NULL, MB_YESNO) == IDYES) {
+				if (MessageBox(hwnd, L"Warning: It is recommended that you start a new game for the randomizer, to prevent corruption of your save file. Randomize on the current save file anyway?", nullptr, MB_YESNO) == IDYES) {
 					randomizer->seedIsRNG = false;
 				}
 				else break;
@@ -408,7 +408,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 		0,
 		0,
 		hInstance,
-		NULL,
+		nullptr,
 		LoadCursor(nullptr, IDC_ARROW),
 		(HBRUSH)(COLOR_WINDOW+1),
 		WINDOW_CLASS,
@@ -431,46 +431,46 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 
 	CreateWindow(L"STATIC", L"Version: " VERSION_STR,
 		WS_TABSTOP | WS_VISIBLE | WS_CHILD | SS_LEFT,
-		490, 15, 90, 16, hwnd, NULL, hInstance, NULL);
+		490, 15, 90, 16, hwnd, nullptr, hInstance, nullptr);
 
 	CreateWindow(L"STATIC", L"Choose Difficuty:",
 		WS_TABSTOP | WS_VISIBLE | WS_CHILD | SS_LEFT,
-		10, 15, 120, 16, hwnd, NULL, hInstance, NULL);
+		10, 15, 120, 16, hwnd, nullptr, hInstance, nullptr);
 	hwndNormal = CreateWindow(L"BUTTON", L"NORMAL - Puzzles that should be reasonably challenging for most players. Puzzle mechanics are mostly identical to those in the original game.",
 		WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_AUTORADIOBUTTON | BS_MULTILINE,
-		10, 35, 570, 35, hwnd, (HMENU)IDC_DIFFICULTY_NORMAL, hInstance, NULL);
+		10, 35, 570, 35, hwnd, (HMENU)IDC_DIFFICULTY_NORMAL, hInstance, nullptr);
 	hwndExpert = CreateWindow(L"BUTTON", L"EXPERT - Very difficult puzzles with complex mechanics and mind-boggling new tricks. For brave players seeking the ultimate challenge.",
 		WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_AUTORADIOBUTTON | BS_MULTILINE,
-		10, 75, 570, 35, hwnd, (HMENU)IDC_DIFFICULTY_EXPERT, hInstance, NULL);
+		10, 75, 570, 35, hwnd, (HMENU)IDC_DIFFICULTY_EXPERT, hInstance, nullptr);
 	if (hard) SendMessage(hwndExpert, BM_SETCHECK, BST_CHECKED, 1);
 	else SendMessage(hwndNormal, BM_SETCHECK, BST_CHECKED, 1);
 
 	CreateWindow(L"STATIC", L"Options:",
 		WS_TABSTOP | WS_VISIBLE | WS_CHILD | SS_LEFT,
-		10, 125, 120, 16, hwnd, NULL, hInstance, NULL);
+		10, 125, 120, 16, hwnd, nullptr, hInstance, nullptr);
 	hwndColorblind = CreateWindow(L"BUTTON", L"Colorblind Mode - The colors on certain panels will be changed to be more accommodating to people with colorblindness. The puzzles themselves are identical to those generated without colorblind mode enabled.",
 		WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_CHECKBOX | BS_MULTILINE,
-		10, 145, 570, 50, hwnd, (HMENU)IDC_COLORBLIND, hInstance, NULL);
+		10, 145, 570, 50, hwnd, (HMENU)IDC_COLORBLIND, hInstance, nullptr);
 	hwndDoubleMode = CreateWindow(L"BUTTON", L"Double Mode - In addition to generating new puzzles, the randomizer will also shuffle the location of most puzzles. (Not recommended for first playthrough)",
 		WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_CHECKBOX | BS_MULTILINE,
-		10, 200, 570, 35, hwnd, (HMENU)IDC_DOUBLE, hInstance, NULL);
+		10, 200, 570, 35, hwnd, (HMENU)IDC_DOUBLE, hInstance, nullptr);
 	if (doubleMode) SendMessage(hwndDoubleMode, BM_SETCHECK, BST_CHECKED, 1);
 
 	CreateWindow(L"STATIC", L"Enter a seed (optional):",
 		WS_TABSTOP | WS_VISIBLE | WS_CHILD | SS_LEFT,
-		10, 250, 160, 16, hwnd, NULL, hInstance, NULL);
+		10, 250, 160, 16, hwnd, nullptr, hInstance, nullptr);
 	hwndSeed = CreateWindow(MSFTEDIT_CLASS, lastSeed == 0 ? L"" : std::to_wstring(lastSeed).c_str(),
         WS_TABSTOP | WS_VISIBLE | WS_CHILD | WS_BORDER,
-        180, 245, 60, 26, hwnd, NULL, hInstance, NULL);
+        180, 245, 60, 26, hwnd, nullptr, hInstance, nullptr);
 	SendMessage(hwndSeed, EM_SETEVENTMASK, NULL, ENM_CHANGE); // Notify on text change
 
 	hwndRandomize = CreateWindow(L"BUTTON", L"Randomize",
 		WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON,
-		250, 245, 130, 26, hwnd, (HMENU)IDC_RANDOMIZE, hInstance, NULL);
+		250, 245, 130, 26, hwnd, (HMENU)IDC_RANDOMIZE, hInstance, nullptr);
 
 	hwndLoadingText = CreateWindow(L"STATIC", L"",
 		WS_TABSTOP | WS_VISIBLE | WS_CHILD | SS_LEFT,
-		400, 250, 160, 16, hwnd, NULL, hInstance, NULL);
+		400, 250, 160, 16, hwnd, nullptr, hInstance, nullptr);
 
 	std::ifstream configFile("WRPGconfig.txt");
 	if (configFile.is_open()) {
@@ -496,19 +496,19 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 		_panel = std::make_shared<Panel>();
 		CreateWindow(L"STATIC", L"Col/Row:",
 			WS_TABSTOP | WS_VISIBLE | WS_CHILD | SS_LEFT,
-			160, 330, 100, 26, hwnd, NULL, hInstance, NULL);
+			160, 330, 100, 26, hwnd, nullptr, hInstance, nullptr);
 		hwndCol = CreateWindow(MSFTEDIT_CLASS, L"",
 			WS_TABSTOP | WS_VISIBLE | WS_CHILD | WS_BORDER,
-			220, 330, 50, 26, hwnd, NULL, hInstance, NULL);
+			220, 330, 50, 26, hwnd, nullptr, hInstance, nullptr);
 		hwndRow = CreateWindow(MSFTEDIT_CLASS, L"",
 			WS_TABSTOP | WS_VISIBLE | WS_CHILD | WS_BORDER,
-			270, 330, 50, 26, hwnd, NULL, hInstance, NULL);
+			270, 330, 50, 26, hwnd, nullptr, hInstance, nullptr);
 		SetWindowText(hwndCol, L"0");
 		SetWindowText(hwndRow, L"0");
 
 		hwndElem = CreateWindow(L"COMBOBOX", L"",
 			WS_TABSTOP | WS_VISIBLE | WS_CHILD | WS_BORDER | CBS_DROPDOWN | CBS_HASSTRINGS,
-			160, 360, 150, 300, hwnd, NULL, hInstance, NULL);
+			160, 360, 150, 300, hwnd, nullptr, hInstance, nullptr);
 
 		const int NUM_ELEMS = 17;
 		TCHAR elems[NUM_ELEMS][24] =
@@ -530,7 +530,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 
 		hwndColor = CreateWindow(L"COMBOBOX", L"",
 			WS_TABSTOP | WS_VISIBLE | WS_CHILD | WS_BORDER | CBS_DROPDOWN | CBS_HASSTRINGS,
-			160, 390, 150, 300, hwnd, NULL, hInstance, NULL);
+			160, 390, 150, 300, hwnd, nullptr, hInstance, nullptr);
 
 		const int NUM_COLORS = 12;
 		TCHAR colors[NUM_COLORS][24] =
@@ -548,23 +548,23 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 
 		CreateWindow(L"BUTTON", L"Place Symbol",
 			WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON,
-			160, 420, 150, 26, hwnd, (HMENU)IDC_ADD, hInstance, NULL);
+			160, 420, 150, 26, hwnd, (HMENU)IDC_ADD, hInstance, nullptr);
 		CreateWindow(L"BUTTON", L"Remove Symbol",
 			WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON,
-			160, 450, 150, 26, hwnd, (HMENU)IDC_REMOVE, hInstance, NULL);
+			160, 450, 150, 26, hwnd, (HMENU)IDC_REMOVE, hInstance, nullptr);
 		CreateWindow(L"BUTTON", L"Test",
 			WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON,
-			160, 530, 150, 26, hwnd, (HMENU)IDC_TEST, hInstance, NULL);
+			160, 530, 150, 26, hwnd, (HMENU)IDC_TEST, hInstance, nullptr);
 
 		CreateWindow(L"STATIC", L"Shape:",
 			WS_TABSTOP | WS_VISIBLE | WS_CHILD | SS_LEFT,
-			50, 350, 50, 16, hwnd, NULL, hInstance, NULL);
+			50, 350, 50, 16, hwnd, nullptr, hInstance, nullptr);
 
 		for (int x = 0; x < 4; ++x) {
 			for (int y = 0; y < 4; ++y) {
 				CreateWindow(L"BUTTON", L"",
 					WS_VISIBLE | WS_CHILD | BS_CHECKBOX,
-					50 + x * 15, 380 + y * 15, 12, 12, hwnd, (HMENU)shapePos[x + y * 4], hInstance, NULL);
+					50 + x * 15, 380 + y * 15, 12, 12, hwnd, (HMENU)shapePos[x + y * 4], hInstance, nullptr);
 			}
 		}
 		for (long long chk : defaultShape) {
@@ -574,42 +574,42 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 
 		CreateWindow(L"BUTTON", L"",
 			WS_VISIBLE | WS_CHILD | BS_CHECKBOX,
-			50, 460, 12, 12, hwnd, (HMENU)IDC_ROTATED, hInstance, NULL);
+			50, 460, 12, 12, hwnd, (HMENU)IDC_ROTATED, hInstance, nullptr);
 		CreateWindow(L"STATIC", L"Rotated",
 			WS_TABSTOP | WS_VISIBLE | WS_CHILD | SS_LEFT,
-			65, 460, 80, 16, hwnd, NULL, hInstance, NULL);
+			65, 460, 80, 16, hwnd, nullptr, hInstance, nullptr);
 
 		CreateWindow(L"BUTTON", L"",
 			WS_VISIBLE | WS_CHILD | BS_CHECKBOX,
-			50, 480, 12, 12, hwnd, (HMENU)IDC_NEGATIVE, hInstance, NULL);
+			50, 480, 12, 12, hwnd, (HMENU)IDC_NEGATIVE, hInstance, nullptr);
 		CreateWindow(L"STATIC", L"Negative",
 			WS_TABSTOP | WS_VISIBLE | WS_CHILD | SS_LEFT,
-			65, 480, 80, 16, hwnd, NULL, hInstance, NULL);
+			65, 480, 80, 16, hwnd, nullptr, hInstance, nullptr);
 
 		CreateWindow(L"BUTTON", L"",
 			WS_VISIBLE | WS_CHILD | BS_CHECKBOX,
-			50, 520, 12, 12, hwnd, (HMENU)IDC_SYMMETRYX, hInstance, NULL);
+			50, 520, 12, 12, hwnd, (HMENU)IDC_SYMMETRYX, hInstance, nullptr);
 		CreateWindow(L"STATIC", L"H. Symmetry",
 			WS_TABSTOP | WS_VISIBLE | WS_CHILD | SS_LEFT,
-			65, 520, 90, 16, hwnd, NULL, hInstance, NULL);
+			65, 520, 90, 16, hwnd, nullptr, hInstance, nullptr);
 
 		CreateWindow(L"BUTTON", L"",
 			WS_VISIBLE | WS_CHILD | BS_CHECKBOX,
-			50, 540, 12, 12, hwnd, (HMENU)IDC_SYMMETRYY, hInstance, NULL);
+			50, 540, 12, 12, hwnd, (HMENU)IDC_SYMMETRYY, hInstance, nullptr);
 		CreateWindow(L"STATIC", L"V. Symmetry",
 			WS_TABSTOP | WS_VISIBLE | WS_CHILD | SS_LEFT,
-			65, 540, 90, 16, hwnd, NULL, hInstance, NULL);
+			65, 540, 90, 16, hwnd, nullptr, hInstance, nullptr);
 
 		CreateWindow(L"STATIC", L"Direction:",
 			WS_TABSTOP | WS_VISIBLE | WS_CHILD | SS_LEFT,
-			50, 560, 90, 16, hwnd, NULL, hInstance, NULL);
+			50, 560, 90, 16, hwnd, nullptr, hInstance, nullptr);
 
 		for (int x = 0; x < 3; ++x) {
 			for (int y = 0; y < 3; ++y) {
 				if (x == 1 && y == 1) continue;
 				CreateWindow(L"BUTTON", L"",
 					WS_VISIBLE | WS_CHILD | BS_CHECKBOX,
-					50 + x * 15, 580 + y * 15, 12, 12, hwnd, (HMENU)directions[x + y * 3], hInstance, NULL);
+					50 + x * 15, 580 + y * 15, 12, 12, hwnd, (HMENU)directions[x + y * 3], hInstance, nullptr);
 			}
 		}
 

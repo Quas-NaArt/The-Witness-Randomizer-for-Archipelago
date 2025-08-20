@@ -31,7 +31,8 @@ Memory::Memory() {
 	bool supposedlyFound = false;
 	bool foundAnyProcesses = false;
 
-	std::ofstream outputStream = std::ofstream("FindProcessErrorLog.txt");
+	{ // outputStream scope context
+		auto outputStream = std::ofstream("FindProcessErrorLog.txt");
 	outputStream << "Found processes:";
 
 	while (Process32Next(snapshot, &entry)) {
@@ -44,18 +45,19 @@ Memory::Memory() {
 			break;
 		}
 	}
+	}
 
 	outputStream.close();
 
 	if (!foundAnyProcesses) {
-		MessageBox(GetActiveWindow(), L"Unable to see any processes at all. Is this program being quarantined by an antivirus?", NULL, MB_OK);
+		MessageBox(GetActiveWindow(), L"Unable to see any processes at all. Is this program being quarantined by an antivirus?", nullptr, MB_OK);
 		throw std::exception("Unable to see any processes at all.");
 	}
 
 	// If we didn't find the process, terminate.
 	if (!_handle) {
 		if (supposedlyFound) {
-			MessageBox(GetActiveWindow(), L"Found Witness exe but could not retrieve handle to it. Is this program being quarantined by an antivirus?", NULL, MB_OK);
+			MessageBox(GetActiveWindow(), L"Found Witness exe but could not retrieve handle to it. Is this program being quarantined by an antivirus?", nullptr, MB_OK);
 			throw std::exception("Found Witness exe but could not retrieve handle to it.");
 		}
 
@@ -71,10 +73,10 @@ Memory::Memory() {
 		}
 
 		if (found32) {
-			MessageBox(GetActiveWindow(), L"You appear to be running the 32 bit version of The Witness. Please run the 64 bit version instead.", NULL, MB_OK);
+			MessageBox(GetActiveWindow(), L"You appear to be running the 32 bit version of The Witness. Please run the 64 bit version instead.", nullptr, MB_OK);
 		}
 		else {
-			MessageBox(GetActiveWindow(), L"Process not found in RAM. Please open The Witness and then try again. See FindProcessErrorLog.txt for list of found processes.", NULL, MB_OK);
+			MessageBox(GetActiveWindow(), L"Process not found in RAM. Please open The Witness and then try again. See FindProcessErrorLog.txt for list of found processes.", nullptr, MB_OK);
 		}
 		throw std::exception("Unable to find process!");
 	}
@@ -95,7 +97,7 @@ Memory::Memory() {
 	}
 
 	if (_baseAddress == 0) {
-		MessageBox(GetActiveWindow(), L"Was able to access the Witness .exe, but couldn't find the base process address!", NULL, MB_OK);
+		MessageBox(GetActiveWindow(), L"Was able to access the Witness .exe, but couldn't find the base process address!", nullptr, MB_OK);
 		throw std::exception("Couldn't find the base process address!");
 	}
 }
@@ -153,19 +155,27 @@ void Memory::findGlobals() {
 		}
 		else {
 			// We had no cached value; scan for it in the process instead.
-			const std::vector<byte> scanBytes = { 0x74, 0x41, 0x48, 0x85, 0xC0, 0x74, 0x04, 0x48, 0x8B, 0x48, 0x10 };
-			std::vector<byte> buff;
-			buff.resize(SIGSCAN_STRIDE + 0x100); // padding in case the sigscan is past the end of the buffer
+			const auto scanBytes = std::to_array<byte>({ 0x74, 0x41, 0x48, 0x85, 0xC0, 0x74, 0x04, 0x48, 0x8B, 0x48, 0x10 });
+			std::vector<byte> buff(SIGSCAN_STRIDE + 0x100); // padding in case the sigscan is past the end of the buffer
 
 			GLOBALS = 0;
 			for (uintptr_t i = 0; i < PROGRAM_SIZE; i += SIGSCAN_STRIDE) {
 				SIZE_T numBytesWritten;
-				if (!ReadProcessMemory(_handle, reinterpret_cast<void*>(_baseAddress + i), &buff[0], buff.size(), &numBytesWritten)) continue;
+				if (!ReadProcessMemory(
+					_handle,
+					reinterpret_cast<void*>(_baseAddress + i),
+					buff.data(),
+					buff.size(),
+					&numBytesWritten)) {
+					continue;
+				}
 				buff.resize(numBytesWritten);
-				int index = Utilities::findSequence(buff, scanBytes);
-				if (index == -1) continue;
+				auto iter = std::search(buff.begin(), buff.end(), scanBytes.begin(), scanBytes.end());
+				if (iter == buff.end()) {
+					continue;
+				}
 
-				index = index + 0x14; // This scan targets a line slightly before the key instruction
+				auto index = std::distance(buff.begin(), iter) + 0x14; // This scan targets a line slightly before the key instruction
 				// (address of next line) + (index interpreted as 4byte int)
 				GLOBALS = (int)(i + index + 4) + *(int*)&buff[index];
 				break;
@@ -211,7 +221,7 @@ void Memory::findGamelibRenderer()
 void Memory::findPlayerPosition() {
 	executeSigScan({ 0x84, 0xC0, 0x75, 0x59, 0xBA, 0x20, 0x00, 0x00, 0x00 }, [this](__int64 offset, int index, const std::vector<byte>& data) {
 		// This int is actually desired_movement_direction, which immediately preceeds camera_position
-		this->CAMERAPOSITION = ReadStaticInt(offset, index + 0x19, data) + 0x10;
+		CAMERAPOSITION = ReadStaticInt(offset, index + 0x19, data) + 0x10;
 
 		return true;
 	});
@@ -225,7 +235,7 @@ void Memory::StopDesertLaserPropagation() {
 				
 				LPVOID addressPointer = reinterpret_cast<LPVOID>(_baseAddress + offset + index);
 
-				WriteProcessMemory(_handle, addressPointer, asmBuff, sizeof(asmBuff) - 1, NULL);
+				WriteProcessMemory(_handle, addressPointer, asmBuff, sizeof(asmBuff) - 1, nullptr);
 
 				return true;
 			}
@@ -244,11 +254,13 @@ void Memory::SetInfiniteChallenge(bool enable) {
 
 		strcpy_s(buffer, name.c_str());
 
-		auto challengeStuff = VirtualAllocEx(_handle, NULL, sizeof(buffer), MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+		auto challengeStuff = VirtualAllocEx(_handle, nullptr, sizeof(buffer), MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+		if (challengeStuff == nullptr) { throw std::bad_alloc(); }
+
 		__int64 soundName = reinterpret_cast<__int64>(challengeStuff);
 		__int64 returnAddress = soundName + 0x20;
 
-		WriteProcessMemory(_handle, challengeStuff, buffer, sizeof(buffer), NULL);
+		WriteProcessMemory(_handle, challengeStuff, buffer, sizeof(buffer), nullptr);
 
 		uint64_t offset = reinterpret_cast<uintptr_t>(ComputeOffset({ GLOBALS, 0x18, 0x00BFF * 8, 0 }));
 
@@ -300,10 +312,12 @@ void Memory::SetInfiniteChallenge(bool enable) {
 
 		SIZE_T allocation_size = sizeof(asmBuff);
 
-		LPVOID allocation_start = VirtualAllocEx(_handle, NULL, allocation_size, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
-		WriteProcessMemory(_handle, allocation_start, asmBuff, allocation_size, NULL);
-		HANDLE thread = CreateRemoteThread(_handle, NULL, 0, (LPTHREAD_START_ROUTINE)allocation_start, NULL, 0, 0);
+		LPVOID allocation_start = VirtualAllocEx(_handle, nullptr, allocation_size, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+		if (allocation_start == nullptr) { throw std::bad_alloc(); }
+		WriteProcessMemory(_handle, allocation_start, asmBuff, allocation_size, nullptr);
 
+		HANDLE thread = CreateRemoteThread(_handle, nullptr, 0, (LPTHREAD_START_ROUTINE)allocation_start, nullptr, 0, 0);
+		if (thread == nullptr) { throw std::bad_alloc(); }
 		WaitForSingleObject(thread, INFINITE);
 
 		__int64 sound_object[1];
@@ -318,13 +332,13 @@ void Memory::SetInfiniteChallenge(bool enable) {
 
 		LPVOID addressPointer = reinterpret_cast<LPVOID>(_recordPlayerUpdate);
 
-		WriteProcessMemory(_handle, addressPointer, asmBuff, sizeof(asmBuff) - 1, NULL);
+		WriteProcessMemory(_handle, addressPointer, asmBuff, sizeof(asmBuff) - 1, nullptr);
 
 		char asmBuff2[] = "\x00\x00\x00"; // Length of song to 0
 
 		LPVOID addressPointer2 = reinterpret_cast<LPVOID>(_bytesLengthChallenge);
 
-		WriteProcessMemory(_handle, addressPointer2, asmBuff2, sizeof(asmBuff2) - 1, NULL);
+		WriteProcessMemory(_handle, addressPointer2, asmBuff2, sizeof(asmBuff2) - 1, nullptr);
 
 
 	}
@@ -333,13 +347,13 @@ void Memory::SetInfiniteChallenge(bool enable) {
 
 		LPVOID addressPointer = reinterpret_cast<LPVOID>(_recordPlayerUpdate);
 
-		WriteProcessMemory(_handle, addressPointer, asmBuff, sizeof(asmBuff) - 1, NULL);
+		WriteProcessMemory(_handle, addressPointer, asmBuff, sizeof(asmBuff) - 1, nullptr);
 
 		char asmBuff2[] = "\x67\xB1\x26"; // Length of song to original length
 
 		LPVOID addressPointer2 = reinterpret_cast<LPVOID>(_bytesLengthChallenge);
 
-		WriteProcessMemory(_handle, addressPointer2, asmBuff2, sizeof(asmBuff2) - 1, NULL);
+		WriteProcessMemory(_handle, addressPointer2, asmBuff2, sizeof(asmBuff2) - 1, nullptr);
 	}
 }
 
@@ -354,10 +368,10 @@ void Memory::applyDestructivePatches() {
 
 	LPVOID addressPointer = reinterpret_cast<LPVOID>(cursorSize);
 
-	WriteProcessMemory(_handle, addressPointer, asmBuff, sizeof(asmBuff) - 1, NULL);
+	WriteProcessMemory(_handle, addressPointer, asmBuff, sizeof(asmBuff) - 1, nullptr);
 }
 
-void Memory::findImportantFunctionAddresses(){
+void Memory::findImportantFunctionAddresses() {
 
 
 	executeSigScan({ 0x44, 0x89, 0x4C, 0x24, 0x20, 0x55, 0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x48, 0x8D, 0x6C, 0x24 }, [this](__int64 offset, int index, const std::vector<byte>& data) {
@@ -382,7 +396,7 @@ void Memory::findImportantFunctionAddresses(){
 			}
 		}
 
-		for (; index < data.size(); index++) {
+		for (; index < data.size(); ++index) {
 			if (data[index - 2] == 0x01 && data[index - 1] == 0xE8) {
 				uint64_t addressOfRelativePointer = _baseAddress + offset + index;
 				int relativePointer;
@@ -538,7 +552,7 @@ void Memory::findImportantFunctionAddresses(){
 			}
 		}
 
-		index++;
+		++index;
 
 		for (; index < data.size(); ++index) {
 			if (data[index - 2] == 0x4B && data[index - 1] == 0x30 && data[index] == 0xE8) { // need to find actual function, which I could not get a sigscan to work for, so I did the function right before it
@@ -702,7 +716,7 @@ void Memory::findImportantFunctionAddresses(){
 
 				int buff[1];
 
-				ReadProcessMemory(_handle, reinterpret_cast<LPCVOID>(this->hudTimePointer), buff, sizeof(buff), NULL);
+				ReadProcessMemory(_handle, reinterpret_cast<LPCVOID>(this->hudTimePointer), buff, sizeof(buff), nullptr);
 
 				this->relativeAddressOf6 = buff[0];
 
@@ -763,7 +777,7 @@ void Memory::findImportantFunctionAddresses(){
 
 				int buff[1];
 
-				ReadProcessMemory(_handle, reinterpret_cast<LPCVOID>(this->boatSpeed4), buff, sizeof(buff), NULL); // Read the current address of the constant loaded into xmm0 relative to the instruction
+				ReadProcessMemory(_handle, reinterpret_cast<LPCVOID>(this->boatSpeed4), buff, sizeof(buff), nullptr); // Read the current address of the constant loaded into xmm0 relative to the instruction
 
 				this->relativeBoatSpeed4Address = buff[0]; // This is now the address of the constant !!relative to the movss instruction!!
 
@@ -787,7 +801,7 @@ void Memory::findImportantFunctionAddresses(){
 
 				int buff[1];
 
-				ReadProcessMemory(_handle, reinterpret_cast<LPCVOID>(this->boatSpeed3), buff, sizeof(buff), NULL);
+				ReadProcessMemory(_handle, reinterpret_cast<LPCVOID>(this->boatSpeed3), buff, sizeof(buff), nullptr);
 
 				this->relativeBoatSpeed3Address = buff[0];
 
@@ -811,7 +825,7 @@ void Memory::findImportantFunctionAddresses(){
 
 				int buff[1];
 
-				ReadProcessMemory(_handle, reinterpret_cast<LPCVOID>(this->boatSpeed2), buff, sizeof(buff), NULL);
+				ReadProcessMemory(_handle, reinterpret_cast<LPCVOID>(this->boatSpeed2), buff, sizeof(buff), nullptr);
 
 				this->relativeBoatSpeed2Address = buff[0];
 
@@ -835,7 +849,7 @@ void Memory::findImportantFunctionAddresses(){
 
 				int buff[1];
 
-				ReadProcessMemory(_handle, reinterpret_cast<LPCVOID>(this->boatSpeed1), buff, sizeof(buff), NULL);
+				ReadProcessMemory(_handle, reinterpret_cast<LPCVOID>(this->boatSpeed1), buff, sizeof(buff), nullptr);
 
 				this->relativeBoatSpeed1Address = buff[0];
 
@@ -905,7 +919,7 @@ void Memory::findImportantFunctionAddresses(){
 
 		LPVOID addressPointer = reinterpret_cast<LPVOID>(comissStatement);
 
-		WriteProcessMemory(_handle, addressPointer, asmBuff, sizeof(asmBuff) - 1, NULL);
+		WriteProcessMemory(_handle, addressPointer, asmBuff, sizeof(asmBuff) - 1, nullptr);
 
 		return true;
 	});
@@ -1034,7 +1048,7 @@ void Memory::ThrowError(std::string message) {
 	GetExitCodeProcess(_handle, &exitCode);
 	if (exitCode != STILL_ACTIVE) throw std::exception(message.c_str());
 	message += "\nPlease close The Witness and try again. If the error persists, please report the issue on the Github Issues page.";
-	MessageBoxA(GetActiveWindow(), message.c_str(), NULL, MB_OK);
+	MessageBoxA(GetActiveWindow(), message.c_str(), nullptr, MB_OK);
 	throw std::exception(message.c_str());
 }
 
@@ -1089,10 +1103,11 @@ void* Memory::ComputeOffset(std::vector<int> offsets, bool forceRecalculatePoint
 uint64_t Memory::getSoundStream(uint64_t issuedSoundPointer) {
 	char resultsBuffer[16];
 
-	auto resultsPointer = VirtualAllocEx(_handle, NULL, sizeof(resultsBuffer), MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+	auto resultsPointer = VirtualAllocEx(_handle, nullptr, sizeof(resultsBuffer), MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+	if (resultsPointer == nullptr) { throw std::bad_alloc(); }
 	auto resultsAddress = reinterpret_cast<uint64_t>(resultsPointer);
 
-	WriteProcessMemory(_handle, resultsPointer, resultsBuffer, sizeof(resultsBuffer), NULL);
+	WriteProcessMemory(_handle, resultsPointer, resultsBuffer, sizeof(resultsBuffer), nullptr); // Doesn't seem to do anything. Maybe wipes it for later reading at the VERY end?
 
 	uint64_t entityManager;
 	ReadAbsolute(reinterpret_cast<LPCVOID>(_baseAddress + GLOBALS), &entityManager, sizeof(uint64_t));
@@ -1156,9 +1171,12 @@ uint64_t Memory::getSoundStream(uint64_t issuedSoundPointer) {
 	buffer[50] = (resultsAddress >> 56) & 0xff;
 
 	SIZE_T allocation_size = sizeof(buffer);
-	LPVOID allocation_start = VirtualAllocEx(_handle, NULL, allocation_size, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
-	WriteProcessMemory(_handle, allocation_start, buffer, allocation_size, NULL);
-	auto thread = CreateRemoteThread(_handle, NULL, 0, (LPTHREAD_START_ROUTINE)allocation_start, NULL, 0, 0);
+	LPVOID allocation_start = VirtualAllocEx(_handle, nullptr, allocation_size, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+	if (allocation_start == nullptr) { throw std::bad_alloc(); }
+
+	WriteProcessMemory(_handle, allocation_start, buffer, allocation_size, nullptr);
+	auto thread = CreateRemoteThread(_handle, nullptr, 0, (LPTHREAD_START_ROUTINE)allocation_start, nullptr, 0, 0);
+	if (thread == nullptr) { throw std::bad_alloc(); }
 
 	WaitForSingleObject(thread, INFINITE);
 
@@ -1204,9 +1222,12 @@ void Memory::PowerNext(int source, int target) {
 
 	SIZE_T allocation_size = sizeof(buffer);
 
-	LPVOID allocation_start = VirtualAllocEx(_handle, NULL, allocation_size, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
-	WriteProcessMemory(_handle, allocation_start, buffer, allocation_size, NULL);
-	CreateRemoteThread(_handle, NULL, 0, (LPTHREAD_START_ROUTINE)allocation_start, NULL, 0, 0);
+	LPVOID allocation_start = VirtualAllocEx(_handle, nullptr, allocation_size, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+	if (allocation_start == nullptr) {
+		throw std::exception("Call to VirtualAllocEx() failed in PowerNext()");
+}
+	WriteProcessMemory(_handle, allocation_start, buffer, allocation_size, nullptr);
+	CreateRemoteThread(_handle, nullptr, 0, (LPTHREAD_START_ROUTINE)allocation_start, nullptr, 0, 0);
 }
 
 void Memory::PowerGauge(int id, int sourceId, int slot) {
@@ -1250,9 +1271,11 @@ void Memory::PowerGauge(int id, int sourceId, int slot) {
 
 	SIZE_T allocation_size = sizeof(buffer);
 
-	LPVOID allocation_start = VirtualAllocEx(_handle, NULL, allocation_size, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
-	WriteProcessMemory(_handle, allocation_start, buffer, allocation_size, NULL);
-	CreateRemoteThread(_handle, NULL, 0, (LPTHREAD_START_ROUTINE)allocation_start, NULL, 0, 0);
+	LPVOID allocation_start = VirtualAllocEx(_handle, nullptr, allocation_size, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+	if (allocation_start == nullptr) { throw std::bad_alloc(); }
+
+	WriteProcessMemory(_handle, allocation_start, buffer, allocation_size, nullptr);
+	CreateRemoteThread(_handle, nullptr, 0, (LPTHREAD_START_ROUTINE)allocation_start, nullptr, 0, 0);
 }
 
 void Memory::CallVoidFunction(int id, uint64_t functionAdress) {
@@ -1285,9 +1308,12 @@ void Memory::CallVoidFunction(int id, uint64_t functionAdress) {
 
 	SIZE_T allocation_size = sizeof(buffer);
 
-	LPVOID allocation_start = VirtualAllocEx(_handle, NULL, allocation_size, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
-	WriteProcessMemory(_handle, allocation_start, buffer, allocation_size, NULL);
-	HANDLE thread = CreateRemoteThread(_handle, NULL, 0, (LPTHREAD_START_ROUTINE)allocation_start, NULL, 0, 0);
+	LPVOID allocation_start = VirtualAllocEx(_handle, nullptr, allocation_size, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+	if (allocation_start == nullptr) throw std::bad_alloc();
+
+	WriteProcessMemory(_handle, allocation_start, buffer, allocation_size, nullptr);
+	HANDLE thread = CreateRemoteThread(_handle, nullptr, 0, (LPTHREAD_START_ROUTINE)allocation_start, nullptr, 0, 0);
+	if (thread == nullptr) { throw std::bad_alloc(); }
 
 	WaitForSingleObject(thread, INFINITE);
 }
@@ -1296,7 +1322,8 @@ void Memory::DisplayHudMessage(std::string message, std::array<float, 3> rgbColo
 	char buffer[1024];
 
 	if (!_messageAddress) {
-		_messageAddress = VirtualAllocEx(_handle, NULL, sizeof(buffer), MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+		_messageAddress = VirtualAllocEx(_handle, nullptr, sizeof(buffer), MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+		if (_messageAddress == nullptr) { throw std::bad_alloc(); }
 
 		__int64 address = hudTimePointer;
 		LPVOID addressPointer = reinterpret_cast<LPVOID>(address);
@@ -1307,7 +1334,7 @@ void Memory::DisplayHudMessage(std::string message, std::array<float, 3> rgbColo
 
 	strcpy_s(buffer, message.c_str());
 
-	WriteProcessMemory(_handle, _messageAddress, buffer, sizeof(buffer), NULL);
+	WriteProcessMemory(_handle, _messageAddress, buffer, sizeof(buffer), nullptr);
 
 	// Write the message's color values to the addresses of the constants we previously found.
 	const SIZE_T colorSize = sizeof(float);
@@ -1316,7 +1343,7 @@ void Memory::DisplayHudMessage(std::string message, std::array<float, 3> rgbColo
 		void* writeAddress = reinterpret_cast<void*>(hudMessageColorAddresses[colorIndex]);
 		void* readAddress = reinterpret_cast<void*>(&rgbColor[colorIndex]);
 
-		WriteProcessMemory(_handle, writeAddress, readAddress, colorSize, NULL);
+		WriteProcessMemory(_handle, writeAddress, readAddress, colorSize, nullptr);
 	}
 
 	__int64 funcAdress = displayHudFunction;
@@ -1349,9 +1376,11 @@ void Memory::DisplayHudMessage(std::string message, std::array<float, 3> rgbColo
 
 	SIZE_T allocation_size = sizeof(asmBuff);
 
-	LPVOID allocation_start = VirtualAllocEx(_handle, NULL, allocation_size, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
-	WriteProcessMemory(_handle, allocation_start, asmBuff, allocation_size, NULL);
-	CreateRemoteThread(_handle, NULL, 0, (LPTHREAD_START_ROUTINE)allocation_start, NULL, 0, 0);
+	LPVOID allocation_start = VirtualAllocEx(_handle, nullptr, allocation_size, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+	if (allocation_start == nullptr) { throw std::bad_alloc(); }
+
+	WriteProcessMemory(_handle, allocation_start, asmBuff, allocation_size, nullptr);
+	CreateRemoteThread(_handle, nullptr, 0, (LPTHREAD_START_ROUTINE)allocation_start, nullptr, 0, 0);
 }
 
 void Memory::RemoveMesh(int id) {
@@ -1375,7 +1404,12 @@ uint64_t Memory::GetTextureMapFromCatalog(std::string texturename) {
 	memset(buffer1, 0, sizeof(buffer1)); //fills with 0s
 	strcpy_s(buffer1, texturename.c_str());
 	//__int64 buffer1pointer = CallMallocFunction(sizeof(buffer1));
-	auto buffer1pointer = reinterpret_cast<uint64_t>(VirtualAllocEx(_handle, NULL, sizeof(buffer1), MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE));
+	// Casting from void* to uint64_t is to allow the bitwise operators later. If those are removed, reset these types back to LPVOID.
+	auto buffer1pointer = reinterpret_cast<uint64_t>(VirtualAllocEx(_handle, nullptr, sizeof(buffer1), MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE));
+	if (buffer1pointer == 0) { throw std::bad_alloc(); }
+	auto resultpointer = reinterpret_cast<uint64_t>(VirtualAllocEx(_handle, nullptr, sizeof(uint64_t), MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE));
+	if (resultpointer == 0) { throw std::bad_alloc(); }
+	WriteProcessMemory(_handle, (LPVOID)buffer1pointer, buffer1, sizeof(buffer1), nullptr);
 
 	auto resultpointer = reinterpret_cast<uint64_t>(VirtualAllocEx(_handle, NULL, sizeof(uint64_t), MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE));
 
@@ -1428,9 +1462,12 @@ uint64_t Memory::GetTextureMapFromCatalog(std::string texturename) {
 
 
 	SIZE_T asm_allocation = sizeof(asmBuff);
-	auto asm_alloc_start = VirtualAllocEx(_handle, NULL, asm_allocation, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
-	WriteProcessMemory(_handle, asm_alloc_start, asmBuff, asm_allocation, NULL);
-	auto thread = CreateRemoteThread(_handle, NULL, 0, (LPTHREAD_START_ROUTINE)asm_alloc_start, NULL, 0, 0);
+	auto asm_alloc_start = VirtualAllocEx(_handle, nullptr, asm_allocation, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+	if (asm_alloc_start == nullptr) { throw std::bad_alloc(); }
+
+	WriteProcessMemory(_handle, asm_alloc_start, asmBuff, asm_allocation, nullptr);
+	auto thread = CreateRemoteThread(_handle, nullptr, 0, (LPTHREAD_START_ROUTINE)asm_alloc_start, nullptr, 0, 0);
+	if (thread == nullptr) { throw std::bad_alloc(); }
 
 	WaitForSingleObject(thread, INFINITE);
 
@@ -1449,20 +1486,23 @@ uint64_t Memory::GetTextureMapFromCatalog(std::string texturename) {
 // If the texture is not currently loaded into memory, the asset won't actually be replaced in-game when the player later loads in the asset.
 void Memory::LoadTexture(uint64_t texturemappointer, std::vector<uint8_t> wtxbuffer) {
 	//first, alloc a place in the game's memory for our wtx texture
-	auto wtxAlloc = reinterpret_cast<uint64_t>(VirtualAllocEx(_handle, NULL, wtxbuffer.size(), MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE));
+	// Casting from void* to uint64_t is to allow the bitwise operators later. If those are removed, reset this type back to LPVOID.
+	const auto wtxAlloc = reinterpret_cast<uint64_t>(VirtualAllocEx(_handle, nullptr, wtxbuffer.size(), MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE));
+	if (wtxAlloc == 0) { throw std::bad_alloc(); }
+
 	//then copy the texture there
-	WriteProcessMemory(_handle, (LPVOID) wtxAlloc, &wtxbuffer[0], wtxbuffer.size(), NULL);
+	WriteProcessMemory(_handle, (LPVOID)wtxAlloc, &wtxbuffer[0], wtxbuffer.size(), nullptr);
 	
-	unsigned char asmBuff[] =
-		"\x48\xB8\x00\x00\x00\x00\x00\x00\x00\x00" //mov rax [address] // load texture function
-		"\x48\xB9\x00\x00\x00\x00\x00\x00\x00\x00" //mov rcx [address] //address of texture map
-		"\x48\xBA\x00\x00\x00\x00\x00\x00\x00\x00" //mov rdx [address] //address of texture to load
-		"\x41\xB8\x00\x00\x00\x00" //mov r8d, [const] // size of the texture
-		"\x48\x83\xEC\x48"// sub rsp,48
-		"\xFF\xD0" //call rax
-		"\x48\x83\xC4\x48" // add rsp,48
-		"\xC3"; //ret
-	uint32_t size_parameter = (uint32_t) wtxbuffer.size(); 
+	auto asmBuff = std::to_array<unsigned char>({
+		0x48, 0xB8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, //mov rax [address] // load texture function
+		0x48, 0xB9, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, //mov rcx [address] //address of texture map
+		0x48, 0xBA, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, //mov rdx [address] //address of texture to load
+		0x41, 0xB8, 0x00, 0x00, 0x00, 0x00, //mov r8d,  [const] // size of the texture
+		0x48, 0x83, 0xEC, 0x48, // sub rsp, 48
+		0xFF, 0xD0,  //call rax
+		0x48, 0x83, 0xC4, 0x48,  // add rsp,48
+		0xC3 }); //ret
+	uint32_t size_parameter = (uint32_t)wtxbuffer.size();
 	asmBuff[2] = loadTextureMapFunction & 0xff;
 	asmBuff[3] = (loadTextureMapFunction >> 8) & 0xff;
 	asmBuff[4] = (loadTextureMapFunction >> 16) & 0xff;
@@ -1493,9 +1533,12 @@ void Memory::LoadTexture(uint64_t texturemappointer, std::vector<uint8_t> wtxbuf
 	asmBuff[35] = (size_parameter >> 24) & 0xff;
 	
 	SIZE_T asm_allocation = sizeof(asmBuff);
-	auto asm_alloc_start = VirtualAllocEx(_handle, NULL, asm_allocation, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
-	WriteProcessMemory(_handle, asm_alloc_start, asmBuff, asm_allocation, NULL);
-	auto thread = CreateRemoteThread(_handle, NULL, 0, (LPTHREAD_START_ROUTINE)asm_alloc_start, NULL, 0, 0);
+	auto asm_alloc_start = VirtualAllocEx(_handle, nullptr, asm_allocation, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+	if (asm_alloc_start == nullptr) { throw std::bad_alloc(); }
+
+	WriteProcessMemory(_handle, asm_alloc_start, asmBuff.data(), asm_allocation, nullptr);
+	auto thread = CreateRemoteThread(_handle, nullptr, 0, (LPTHREAD_START_ROUTINE)asm_alloc_start, nullptr, 0, 0);
+	if (thread == nullptr) { throw std::bad_alloc(); }
 
 	WaitForSingleObject(thread, INFINITE);
 }
@@ -1504,20 +1547,22 @@ void Memory::LoadTexture(uint64_t texturemappointer, std::vector<uint8_t> wtxbuf
 // Doing this allows you to immediately edit textures in memory. Package names are for ex: "save_58472"
 // which would load both save_58472_0.pkg and save_58472_1.pkg. Those packages contain the color-bunker panels.
 void Memory::LoadPackage(std::string packagename) {
-	auto stringAlloc = reinterpret_cast<uint64_t>(VirtualAllocEx(_handle, NULL, packagename.length() + 1 , MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE));
-	auto pkgname = packagename.c_str();
-	WriteProcessMemory(_handle, (LPVOID)stringAlloc, pkgname, packagename.length()+1, NULL);
+	// Casting from void* to uint64_t is to allow the bitwise operators later. If those are removed, reset this type back to LPVOID.
+	auto stringAlloc = reinterpret_cast<uint64_t>(VirtualAllocEx(_handle, nullptr, packagename.length() + 1, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE));
+	if (stringAlloc == 0) { throw std::bad_alloc(); }
 
-	unsigned char asmBuff[] =
-		"\x48\xB8\x00\x00\x00\x00\x00\x00\x00\x00" //mov rax [address] // load texture function
-		"\x48\xB9\x00\x00\x00\x00\x00\x00\x00\x00" //mov rcx [address] // pointer to string with package name
-		"\x48\xBA\x00\x00\x00\x00\x00\x00\x00\x00" //mov rdx [address] // state of package to request. (0 is "loaded", 1 is "unloaded" 2 is "cached", 3 is "uncached".)
-		"\x41\xB8\x00\x00\x00\x00" //mov r8d, [const] //not sure what this number is supposed to be. its always zero
-		"\x41\x83\xc9\xff" // or r9d, 0xffffffff // not sure either. sometimes the game calls this with other values - i think something related to async loading? Which as best i can tell is optional.
-		"\x48\x83\xEC\x48"// sub rsp,48
-		"\xFF\xD0" //call rax
-		"\x48\x83\xC4\x48" // add rsp,48
-		"\xC3"; //ret
+	WriteProcessMemory(_handle, (LPVOID)stringAlloc, packagename.c_str(), packagename.length() + 1, nullptr);
+
+	auto asmBuff = std::to_array<unsigned char>({
+		  0x48, 0xB8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 //mov rax [address] // load texture function
+		, 0x48, 0xB9, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 //mov rcx [address] // pointer to string with package name
+		, 0x48, 0xBA, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 //mov rdx [address] // state of package to request. (0 is "loaded", 1 is "unloaded" 2 is "cached", 3 is "uncached".)
+		, 0x41, 0xB8, 0x00, 0x00, 0x00, 0x00 //mov r8d, [const] //not sure what this number is supposed to be. its always zero
+		, 0x41, 0x83, 0xc9, 0xff // or r9d, 0xffffffff // not sure either. sometimes the game calls this with other values - i think something related to async loading? Which as best i can tell is optional.
+		, 0x48, 0x83, 0xEC, 0x48// sub rsp,48
+		, 0xFF, 0xD0 //call rax
+		, 0x48, 0x83, 0xC4, 0x48 // add rsp,48
+		, 0xC3 }); //ret
 	asmBuff[2] = loadPackageFunction & 0xff;
 	asmBuff[3] = (loadPackageFunction >> 8) & 0xff;
 	asmBuff[4] = (loadPackageFunction >> 16) & 0xff;
@@ -1535,10 +1580,12 @@ void Memory::LoadPackage(std::string packagename) {
 	asmBuff[18] = (stringAlloc >> 48) & 0xff;
 	asmBuff[19] = (stringAlloc >> 56) & 0xff;
 
-	SIZE_T asm_allocation = sizeof(asmBuff);
-	auto asm_alloc_start = VirtualAllocEx(_handle, NULL, asm_allocation, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
-	WriteProcessMemory(_handle, asm_alloc_start, asmBuff, asm_allocation, NULL);
-	auto thread = CreateRemoteThread(_handle, NULL, 0, (LPTHREAD_START_ROUTINE)asm_alloc_start, NULL, 0, 0);
+	auto asm_alloc_start = VirtualAllocEx(_handle, nullptr, asmBuff.size(), MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+	if (asm_alloc_start == nullptr) { throw std::bad_alloc(); }
+
+	WriteProcessMemory(_handle, asm_alloc_start, asmBuff.data(), asmBuff.size(), nullptr);
+	auto thread = CreateRemoteThread(_handle, nullptr, 0, (LPTHREAD_START_ROUTINE)asm_alloc_start, nullptr, 0, 0);
+	if (thread == nullptr) { throw std::bad_alloc(); }
 
 	WaitForSingleObject(thread, INFINITE);
 

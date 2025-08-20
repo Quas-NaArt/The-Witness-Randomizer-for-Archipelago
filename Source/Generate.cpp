@@ -325,7 +325,7 @@ void Generate::clear()
 
 //Reset generator variables and lists used when generating puzzles. (not config settings)
 void Generate::resetVars() {
-	_panel = NULL; //This is needed for the generator to read in the next panel
+	_panel = nullptr; //This is needed for the generator to read in the next panel
 	_starts.clear();
 	_exits.clear();
 	_custom_grid.clear();
@@ -358,8 +358,12 @@ bool Generate::generate_maze(int id, int numStarts, int numExits)
 {
 	initPanel(id);
 
+	if (numStarts > 0) {
 	place_start(numStarts);
+	}
+	if (numExits > 0) {
 	place_exit(numExits);
+	}
 
 	//Prevent start and exit from overlapping, except in one one particular puzzle (0x00083).
 	if (id == 0x00083 && _width == 15 && _height == 15) {
@@ -710,7 +714,7 @@ bool Generate::generate_path_length(int minLength, int maxLength)
 		return false;
 	set_path(pos);
 	while (pos != exit) {
-		if (fails++ > 20)
+		if (fails++ > 20) // post-increment matters, so refactor
 			return false;
 		Point dir = Utilities::pick_random(_DIRECTIONS2);
 		Point newPos = pos + dir;

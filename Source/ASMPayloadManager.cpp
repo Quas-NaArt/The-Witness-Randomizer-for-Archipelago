@@ -13,10 +13,6 @@ void ASMPayloadManager::create() {
 	}
 }
 
-ASMPayloadManager::ASMPayloadManager(){
-	return;
-}
-
 ASMPayloadManager* ASMPayloadManager::get() {
 	return _singleton;
 }
@@ -36,7 +32,7 @@ void ASMPayloadManager::findGameloopFunction() {
 void ASMPayloadManager::setupPayload() {
 	Memory* memory = Memory::get();
 
-	payloadBlocked = reinterpret_cast<uint64_t>(VirtualAllocEx(memory->getHandle(), NULL, 0x4096, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE));
+	payloadBlocked = reinterpret_cast<uint64_t>(VirtualAllocEx(memory->getHandle(), nullptr, 0x4096, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE));
 	payloadStart = payloadBlocked + 8;
 
 	memory->WriteAbsolute(reinterpret_cast<LPVOID>(payloadBlocked), "\x00\x00\x00\x00\x00\x00\x00\x00", 8);
@@ -160,12 +156,16 @@ void ASMPayloadManager::UpdateEntityPosition(int id) {
 uint64_t ASMPayloadManager::FindSoundByName(std::string name) {
 	Memory* memory = Memory::get();
 
-	char resultsBuffer[16];
+	std::array<char, 16> resultsBuffer{}; // buffer is empty
 
-	auto resultsPointer = VirtualAllocEx(memory->getHandle(), NULL, sizeof(resultsBuffer), MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+	auto resultsPointer = VirtualAllocEx(memory->getHandle(), nullptr, sizeof(resultsBuffer), MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+	if (!resultsPointer) {
+		throw std::exception("Call to VirtualAllocEx in ASMPayloadManager::FindSoundByName() failed.");
+	}
+
 	auto resultsAddress = reinterpret_cast<uint64_t>(resultsPointer);
 
-	WriteProcessMemory(memory->getHandle(), resultsPointer, resultsBuffer, sizeof(resultsBuffer), NULL);
+	WriteProcessMemory(memory->getHandle(), resultsPointer, resultsBuffer.data(), sizeof(resultsBuffer), nullptr); // writes from empty buffer, why?
 
 	uint64_t entityManager;
 
@@ -266,14 +266,14 @@ int ASMPayloadManager::FindEntityByName(std::string name) {
 
 	strcpy_s(namebuffer, name.c_str());
 
-	auto resultsPointer = VirtualAllocEx(memory->getHandle(), NULL, sizeof(namebuffer), MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+	auto resultsPointer = VirtualAllocEx(memory->getHandle(), nullptr, sizeof(namebuffer), MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
 	auto resultsAddress = reinterpret_cast<uint64_t>(resultsPointer);
 	auto namePointer = reinterpret_cast<LPVOID>(resultsAddress + 8);
 
-	WriteProcessMemory(memory->getHandle(), namePointer, namebuffer, sizeof(namebuffer), NULL);
+	WriteProcessMemory(memory->getHandle(), namePointer, namebuffer, sizeof(namebuffer), nullptr);
 
 
-	uint64_t entityManager;
+	auto entityManager = memory->ReadAbsolute<uint64_t>(reinterpret_cast<LPCVOID>(memory->getBaseAddress() + memory->GLOBALS));
 
 	memory->ReadAbsolute(reinterpret_cast<LPCVOID>(memory->getBaseAddress() + memory->GLOBALS), &entityManager, sizeof(uint64_t));
 
@@ -369,7 +369,7 @@ void ASMPayloadManager::BridgeToggle(int associatedPanel, bool extend) {
 	buffer[9] = (offset >> 40) & 0xff;
 	buffer[10] = (offset >> 48) & 0xff;
 	buffer[11] = (offset >> 56) & 0xff;
-	buffer[13] = extend & 0xff;
+	buffer[13] = extend ? 0xff : 0x00;
 	buffer[22] = functionAddress & 0xff;
 	buffer[23] = (functionAddress >> 8) & 0xff;
 	buffer[24] = (functionAddress >> 16) & 0xff;
@@ -407,8 +407,8 @@ void ASMPayloadManager::SendBunkerElevatorToFloor(int floor, bool force) {
 	buffer[9] = (offset >> 40) & 0xff;
 	buffer[10] = (offset >> 48) & 0xff;
 	buffer[11] = (offset >> 56) & 0xff;
-	buffer[13] = floor & 0xff; // floor no
-	buffer[19] = force & 0xff; // force
+	buffer[13] = floor ? 0xff : 0x00; // floor no
+	buffer[19] = force ? 0xff : 0x00; // force
 	buffer[35] = functionAddress & 0xff;
 	buffer[36] = (functionAddress >> 8) & 0xff;
 	buffer[37] = (functionAddress >> 16) & 0xff;
@@ -430,9 +430,9 @@ void ASMPayloadManager::ToggleFloodgate(std::string name, bool disconnect) {
 
 	strcpy_s(namebuffer, name.c_str());
 
-	auto nameAlloc = VirtualAllocEx(Memory::get()->getHandle(), NULL, sizeof(namebuffer), MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
-
-	WriteProcessMemory(Memory::get()->getHandle(), nameAlloc, namebuffer, sizeof(namebuffer), NULL);
+	auto nameAlloc = VirtualAllocEx(Memory::get()->getHandle(), nullptr, sizeof(namebuffer), MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+	if (nameAlloc == nullptr) { throw std::bad_alloc(); }
+	WriteProcessMemory(Memory::get()->getHandle(), nameAlloc, namebuffer, sizeof(namebuffer), nullptr);
 
 	uint64_t nameAllocPointer = reinterpret_cast<uint64_t>(nameAlloc); nameAllocPointer;
 
@@ -455,7 +455,7 @@ void ASMPayloadManager::ToggleFloodgate(std::string name, bool disconnect) {
 	buffer[9] = (nameAllocPointer >> 40) & 0xff;
 	buffer[10] = (nameAllocPointer >> 48) & 0xff;
 	buffer[11] = (nameAllocPointer >> 56) & 0xff;
-	buffer[13] = disconnect & 0xff;
+	buffer[13] = disconnect ? 0xff : 0x00;
 	buffer[22] = functionAddress & 0xff;
 	buffer[23] = (functionAddress >> 8) & 0xff;
 	buffer[24] = (functionAddress >> 16) & 0xff;
